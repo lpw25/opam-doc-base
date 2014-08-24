@@ -16,16 +16,27 @@
 
 open OpamDocPath
 
+let parse_module_path pkg lib md =
+  let pkg = Package.of_string pkg in
+  let lib = Library.create pkg (Library.Name.of_string lib) in
+  let rec loop = function
+    | Longident.Lident s ->
+        let name = Module.Name.of_string s in
+          Module.create lib name
+    | Longident.Ldot(p, s) ->
+        let name = Module.Name.of_string s in
+          Module.create_submodule (loop p) name
+    | Longident.Lapply _ ->
+        OpamGlobals.error_and_exit "Bad module identifier %s" md
+  in
+    loop (Longident.parse md)
+
 let test package library module_ =
   OpamGlobals.root_dir := OpamGlobals.default_opam_dir;
+  let md = parse_module_path package library module_ in
   let t = OpamState.load_state "opam-units" in
   let s = OpamUnitsState.load_state t in
   let r = OpamDocState.load_state t s in
-  let pkg = Package.of_string package in
-  let lib_name = Library.Name.of_string library in
-  let lib = Library.create pkg lib_name in
-  let md_name = Module.Name.of_string module_ in
-  let md = Module.create lib md_name in
   let intf = OpamDocState.load_module r md in
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
