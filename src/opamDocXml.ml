@@ -225,7 +225,7 @@ end = struct
     | `Data s -> "\"" ^ s ^ "\""
     | `Dtd _ -> "doctype"
     | `El_start((_, name), _) -> "<" ^ name ^ ">"
-    | `El_end -> "<\ ... >"
+    | `El_end -> "<\\ ... >"
 
   let show_error (line, column) msg =
       OpamGlobals.error_and_exit "Parse error:%d.%d: %s" line column msg
@@ -235,7 +235,7 @@ end = struct
     let pos = Xmlm.pos input in
       if Xmlm.eoi input then begin
         let msg =
-          Printf.sprintf "expected  %s but found end of file" expected
+          Printf.sprintf "expected %s but found end of file" expected
         in
           show_error pos msg
       end else begin
@@ -263,6 +263,13 @@ type open_ = Parser.open_ = Open
 type close = Parser.close = Close
 
 (* XML parsers *)
+
+let string_in =
+  let action = function
+    | None -> ""
+    | Some s -> s
+  in
+    Parser.( !!action %(opt data) )
 
 let name_in =
   let action Open s Close = s in
@@ -355,7 +362,7 @@ let rec text_element_in input =
   let reference Open rf txto Close = Ref(rf, txto) in
   let parser =
     Parser.(   !!raw %data
-            @@ !!code %(open_ code_n) %data %(close code_n)
+            @@ !!code %(open_ code_n) %string_in %(close code_n)
             @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
             @@ !!italic %(open_ italic_n) %(list text_element_in) %(close italic_n)
             @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
@@ -415,15 +422,19 @@ let label_in =
             @@ !!default %(open_ default_n) %data %(close default_n) )
 
 let rec type_expr_in input =
-  let var Open string_opt Close = Var string_opt in
+  let var Open string Close = Var string in
+  let alias Open typ Open string Close Close = Alias(typ, string) in
   let arrow Open lbl arg ret Close = Arrow(lbl, arg, ret) in
   let tuple Open typs Close = Tuple typs in
   let constr Open path typs Close = Constr(path, typs) in
   let parser =
-    Parser.(   !!var %(open_ var_n) %(opt data) %(close var_n)
+    Parser.(   !!var %(open_ var_n) %data %(close var_n)
+            @@ !!alias %(open_ alias_n)
+                         %type_expr_in %(open_ var_n) %data %(close var_n)
+                       %(close alias_n)
             @@ !!arrow %(open_ arrow_n)
-                           %(opt label_in) %type_expr_in %type_expr_in
-                         %(close arrow_n)
+                         %(opt label_in) %type_expr_in %type_expr_in
+                       %(close arrow_n)
             @@ !!tuple %(open_ tuple_n) %(list type_expr_in) %(close tuple_n)
             @@ !!constr %(open_ constr_n)
                           %type_path_in %(list type_expr_in)
@@ -478,8 +489,8 @@ let manifest_in =
     Parser.( !!action %(open_ manifest_n) %type_expr_in %(close manifest_n) )
 
 let param_in =
-  let action Open string_opt Close = string_opt in
-    Parser.( !!action %(open_ param_n) %(opt data) %(close param_n) )
+  let action Open string Close = string in
+    Parser.( !!action %(open_ param_n) %data %(close param_n) )
 
 let type_decl_in =
   let action Open name doc param manifest decl Close =
@@ -509,7 +520,7 @@ let nested_module_in =
   let action Open name doc desc Close : nested_module =
     {name = Module.Name.of_string name; doc; desc}
   in
-  let alias Open path Close = Alias path in
+  let alias Open path Close : nested_module_desc= Alias path in
   let path path : nested_module_desc = Type (Path path) in
   let sign Open Close : nested_module_desc = Type Signature in
     Parser.( !!action %(open_ module_n) %name_in %doc_in
@@ -631,6 +642,10 @@ let rec list p output l =
 
 (* XML printers *)
 
+let string_out output str =
+  if String.length str = 0 then ()
+  else data output str
+
 let name_out output name =
   open_ output name_n;
   data output name;
@@ -696,7 +711,7 @@ let rec text_element_out output = function
   | Raw s -> data output s
   | Code s ->
       open_ output code_n;
-      data output s;
+      string_out output s;
       close output code_n
   | Style(Bold, txt) ->
       open_ output bold_n;
@@ -798,8 +813,15 @@ let label_out output = function
 let rec type_expr_out output = function
   | Var v ->
       open_ output var_n;
-      opt data output v;
+      data output v;
       close output var_n
+  | Alias(typ, v) ->
+      open_ output alias_n;
+      type_expr_out output typ;
+      open_ output var_n;
+      data output v;
+      close output var_n;
+      close output alias_n
   | Arrow(lbl, arg, ret) ->
       open_ output arrow_n;
       opt label_out output lbl;
@@ -866,7 +888,7 @@ let manifest_out output typ =
 
 let param_out output v =
   open_ output param_n;
-  opt data output v;
+  data output v;
   close output param_n
 
 let type_decl_out output {name; doc; param; manifest; decl} =
@@ -893,7 +915,7 @@ let nested_module_type_out output {name; doc; desc} =
     close output module_type_n
 
 let nested_module_out output ({name; doc; desc} : nested_module) =
- let module_desc_out output = function
+ let module_desc_out output : nested_module_desc -> unit = function
    | Alias path ->
        open_ output alias_n;
        module_path_out output path;

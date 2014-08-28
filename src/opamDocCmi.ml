@@ -27,6 +27,10 @@ let map_opt f = function
   | None -> None
   | Some x -> Some (f x)
 
+let iter_opt f = function
+  | None -> ()
+  | Some x -> f x
+
 let rec read_style : Documentation.style_kind -> style = function
   | SK_bold -> Bold
   | SK_italic -> Italic
@@ -119,34 +123,139 @@ let read_label lbl =
       Some (Default (String.sub lbl 1 (len - 1)))
     else Some (Label lbl)
 
+(* Handle type variable names *)
+
+let names = ref []
+let name_counter = ref 0
+let used_names = ref []
+
+let reset_names () = names := []; name_counter := 0; used_names := []
+
+let add_used_name = function
+  | Some name ->
+      if not (List.mem name !used_names) then
+        used_names := name :: !used_names
+  | None -> ()
+
+let rec new_name () =
+  let name =
+    if !name_counter < 26
+    then String.make 1 (Char.chr(97 + !name_counter))
+    else String.make 1 (Char.chr(97 + !name_counter mod 26)) ^
+           string_of_int(!name_counter / 26) in
+  incr name_counter;
+  if List.mem name !used_names
+  || List.exists (fun (_, name') -> name = name') !names
+  then new_name ()
+  else name
+
+let name_of_type (t : Types.type_expr) =
+  try List.assq t !names with Not_found ->
+    let name =
+      match t.desc with
+      | Tvar (Some name) | Tunivar (Some name) ->
+          let current_name = ref name in
+          let i = ref 0 in
+          while List.exists (fun (_, name') -> !current_name = name') !names do
+            current_name := name ^ (string_of_int !i);
+            i := !i + 1;
+          done;
+          !current_name
+      | _ -> new_name ()
+    in
+    if name <> "_" then names := (t, name) :: !names;
+    name
+
+(* Handle recursive types *)
+
+let aliased = ref []
+
+let reset_aliased () = aliased := []
+
+let is_aliased ty = List.memq ty !aliased
+
+let add_alias ty =
+  if not (is_aliased ty) then aliased := ty :: !aliased
+
+let aliasable (ty : Types.type_expr) =
+  match ty.desc with
+  | Tvar _ -> false
+  | _ -> true
+
+let mark_type ty =
+  let rec loop visited ty =
+    let ty = Btype.repr ty in
+    if List.memq ty visited && aliasable ty then add_alias ty else
+      let visited = ty :: visited in
+      match ty.desc with
+      | Tvar name -> add_used_name name
+      | Tarrow(_, ty1, ty2, _) ->
+          loop visited ty1;
+          loop visited ty2
+      | Ttuple tyl -> List.iter (loop visited) tyl
+      | Tconstr(p, tyl, _) ->
+          List.iter (loop visited) tyl
+      | Tsubst ty -> loop visited ty
+      | _ -> ()
+  in
+    loop [] ty
+
+let mark_type_kind = function
+  | Type_abstract -> ()
+  | Type_variant cds ->
+      List.iter
+        (fun cd ->
+           List.iter mark_type cd.cd_args;
+           iter_opt mark_type cd.cd_res)
+        cds
+  | Type_record(lds, _) ->
+      List.iter (fun ld -> mark_type ld.ld_type) lds
+  | Type_open -> ()
+
 let rec read_type_expr res (typ : Types.type_expr) : type_expr =
-  match typ.desc with
-  | Tvar v -> Var v
-  | Tarrow(lbl, arg, ret, _) ->
-      Arrow(read_label lbl, read_type_expr res arg, read_type_expr res ret)
-  | Ttuple typs -> Tuple (List.map (read_type_expr res) typs)
-  | Tconstr(p, typs, _) ->
-      let p =
-        match find_type res p with
-        | None -> Unknown (Path.name p)
-        | Some p -> Known p
-      in
-      let typs = List.map (read_type_expr res) typs in
-        Constr(p, typs)
-  | Tlink typ -> read_type_expr res typ
-  | Tsubst _ -> assert false
-  | _ -> raise Not_implemented
+  let typ = Btype.repr typ in
+  if List.mem_assq typ !names then Var (name_of_type typ)
+  else begin
+    let alias =
+      if is_aliased typ && aliasable typ then Some (name_of_type typ)
+      else None
+    in
+    let typ =
+      match typ.desc with
+      | Tvar _ -> Var (name_of_type typ)
+      | Tarrow(lbl, arg, ret, _) ->
+          Arrow(read_label lbl, read_type_expr res arg, read_type_expr res ret)
+      | Ttuple typs -> Tuple (List.map (read_type_expr res) typs)
+      | Tconstr(p, typs, _) ->
+          let p =
+            match find_type res p with
+            | None -> Unknown (Path.name p)
+            | Some p -> Known p
+          in
+          let typs = List.map (read_type_expr res) typs in
+            Constr(p, typs)
+      | Tsubst typ -> read_type_expr res typ
+      | _ -> raise Not_implemented
+    in
+      match alias with
+      | Some name -> Alias(typ, name)
+      | None -> typ
+  end
+
+let read_type_scheme res (typ : Types.type_expr) : type_expr =
+  reset_names ();
+  reset_aliased ();
+  mark_type typ;
+  read_type_expr res typ
 
 let read_value_description res id (v : Types.value_description) =
   { name = Value.Name.of_string (Ident.name id);
     doc = read_attributes res v.val_attributes;
-    type_ = read_type_expr res v.val_type; }
+    type_ = read_type_scheme res v.val_type; }
 
-let rec read_type_param (typ : Types.type_expr) =
-  match typ.desc with
-  | Tvar v -> v
-  | Tlink typ -> read_type_param typ
-  | Tsubst _ -> assert false
+let rec read_type_param res (typ : Types.type_expr) =
+  match read_type_expr res typ with
+  | Var v -> v
   | _ -> raise Not_implemented
 
 let read_constructor_declaration res (cd : Types.constructor_declaration) =
@@ -169,9 +278,15 @@ let read_type_kind res : Types.type_kind -> type_decl option = function
   | Type_open -> raise Not_implemented
 
 let read_type_declaration res id (decl : Types.type_declaration) =
+  reset_names ();
+  reset_aliased ();
+  List.iter add_alias decl.type_params;
+  List.iter mark_type decl.type_params;
+  iter_opt mark_type decl.type_manifest;
+  mark_type_kind decl.type_kind;
   { name = Type.Name.of_string (Ident.name id);
     doc = read_attributes res decl.type_attributes;
-    param = List.map read_type_param decl.type_params;
+    param = List.map (read_type_param res) decl.type_params;
     manifest = map_opt (read_type_expr res) decl.type_manifest;
     decl = read_type_kind res decl.type_kind; }
 

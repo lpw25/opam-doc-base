@@ -90,7 +90,7 @@ and nested_module_type_expr =
 and type_ =
   { name: Type.Name.t;
     doc: doc;
-    param: var list;
+    param: string list;
     manifest: type_expr option;
     decl: type_decl option; }
 
@@ -119,12 +119,11 @@ and val_ =
 (** {3 Type expressions} *)
 
 and type_expr =
-  | Var of var
+  | Var of string
+  | Alias of type_expr * string
   | Arrow of label option * type_expr * type_expr
   | Tuple of type_expr list
   | Constr of type_path * type_expr list
-
-and var = string option
 
 and label =
   | Label of string
