@@ -19,4 +19,3 @@ build: [
   [make "install"]
 ]
 remove: ["ocamlfind" "remove" "opam-doc-base"]
-libraries: "opam-doc-base"
