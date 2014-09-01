@@ -40,13 +40,19 @@ let rec read_style : Documentation.style_kind -> style = function
   | SK_right -> Right
   | SK_superscript -> Superscript
   | SK_subscript -> Subscript
-  | SK_custom _ -> raise Not_implemented
+  | SK_custom s -> raise Not_implemented
 
 and read_text_element res : Documentation.text_element -> text = function
   | Raw s -> [Raw s]
   | Code s -> [Code s]
   | PreCode s -> [PreCode s]
   | Verbatim s -> [Verbatim s]
+  | Style(SK_custom s as sty, []) ->
+      if String.length s > 1 && s.[0] = '_' then
+        let s = String.sub s 1 (String.length s - 1) in
+        read_text_element res Documentation.(Style (SK_subscript, [Raw s]))
+      else
+        [Style(read_style sty, [])]
   | Style(sk, txt) -> [Style(read_style sk, read_text res txt)]
   | List l -> [List(List.map (read_text res) l)]
   | Enum l -> [Enum(List.map (read_text res) l)]
