@@ -77,7 +77,7 @@ module Parser : sig
 
   (* Expose functional nature of parser to allow eta expansion *)
   type 'a t = 'a contra -> 'a co
-    and 'a contra and 'a co
+  and 'a contra and 'a co
 
   val pure: 'a -> 'a t
 
@@ -209,7 +209,7 @@ end = struct
   let cons hd tl = hd :: tl
   let rec list p input =
     let parser = !!nil @@ !!cons %p %(list p) in
-      parser input
+    parser input
 
   let seq p = !!cons %p %(list p)
 
@@ -228,27 +228,27 @@ end = struct
     | `El_end -> "<\\ ... >"
 
   let show_error (line, column) msg =
-      OpamGlobals.error_and_exit "Parse error:%d.%d: %s" line column msg
+    OpamGlobals.error_and_exit "Parse error:%d.%d: %s" line column msg
 
   let expected_error input e =
     let expected = String.concat " or " (List.map expected_msg e) in
     let pos = Xmlm.pos input in
-      if Xmlm.eoi input then begin
-        let msg =
-          Printf.sprintf "expected %s but found end of file" expected
-        in
-          show_error pos msg
-      end else begin
-        let found = found_msg (Xmlm.peek input) in
-        let msg =
-          Printf.sprintf "expected  %s but found %s" expected found
-        in
-          show_error pos msg
-     end
+    if Xmlm.eoi input then begin
+      let msg =
+        Printf.sprintf "expected %s but found end of file" expected
+      in
+      show_error pos msg
+    end else begin
+      let found = found_msg (Xmlm.peek input) in
+      let msg =
+        Printf.sprintf "expected  %s but found %s" expected found
+      in
+      show_error pos msg
+    end
 
   let xmlm_error pos err =
     let msg = Xmlm.error_message err in
-      show_error pos msg
+    show_error pos msg
 
   let rec run p input =
     match p input with
@@ -269,80 +269,80 @@ let string_in =
     | None -> ""
     | Some s -> s
   in
-    Parser.( !!action %(opt data) )
+  Parser.( !!action %(opt data) )
 
 let name_in =
   let action Open s Close = s in
-    Parser.( !!action %(open_ name_n) %data %(close name_n) )
+  Parser.( !!action %(open_ name_n) %data %(close name_n) )
 
 let package_t_in =
   let action Open name Close = Package.of_string name in
-    Parser.( !!action %(open_ package_n) %name_in %(close package_n) )
+  Parser.( !!action %(open_ package_n) %name_in %(close package_n) )
 
 let library_t_in =
   let action Open package name Close =
     let name = Library.Name.of_string name in
-      Library.create package name
+    Library.create package name
   in
-    Parser.( !!action %(open_ library_n)
-                        %package_t_in %name_in
-                      %(close library_n) )
+  Parser.( !!action %(open_ library_n)
+           %package_t_in %name_in
+           %(close library_n) )
 
 let rec module_t_in input =
   let action Open create name Close =
     let name = Module.Name.of_string name in
-      create name
+    create name
   in
   let parser =
     Parser.( !!action %(open_ module_n)
-                        %module_parent_in %name_in
-                      %(close module_n) )
+             %module_parent_in %name_in
+             %(close module_n) )
   in
-    parser input
+  parser input
 
 and module_parent_in input =
   let library lib = Module.create lib in
   let module_ md = Module.create_submodule md in
   let parser =
     Parser.(   !!library %library_t_in
-            @@ !!module_ %module_t_in  )
+               @@ !!module_ %module_t_in  )
   in
-    parser input
+  parser input
 
 let module_type_t_in =
   let action Open parent name Close =
     let name = ModuleType.Name.of_string name in
-      ModuleType.create parent name
+    ModuleType.create parent name
   in
-    Parser.( !!action %(open_ module_type_n)
-                        %module_t_in %name_in
-                      %(close module_type_n) )
+  Parser.( !!action %(open_ module_type_n)
+           %module_t_in %name_in
+           %(close module_type_n) )
 
 let type_t_in =
   let action Open parent name Close =
     let name = Type.Name.of_string name in
-      Type.create parent name
+    Type.create parent name
   in
-    Parser.( !!action %(open_ type_n) %module_t_in %name_in %(close type_n) )
+  Parser.( !!action %(open_ type_n) %module_t_in %name_in %(close type_n) )
 
 let value_t_in =
   let action Open parent name Close =
     let name = Value.Name.of_string name in
-      Value.create parent name
+    Value.create parent name
   in
-    Parser.( !!action %(open_ val_n) %module_t_in %name_in %(close val_n) )
+  Parser.( !!action %(open_ val_n) %module_t_in %name_in %(close val_n) )
 
 let reference_in =
   let module_ Open path Close = Module path in
   let module_type Open path Close = ModuleType path in
   let type_ Open path Close = Type path in
   let val_ Open path Close = Val path in
-    Parser.(    !!module_ %(open_ module_n) %module_t_in %(close module_n)
-             @@ !!module_type %(open_ module_type_n)
-                                %module_type_t_in
-                              %(close module_type_n)
-             @@ !!type_ %(open_ type_n) %type_t_in %(close type_n)
-             @@ !!val_ %(open_ val_n) %value_t_in %(close val_n) )
+  Parser.(    !!module_ %(open_ module_n) %module_t_in %(close module_n)
+              @@ !!module_type %(open_ module_type_n)
+                 %module_type_t_in
+                 %(close module_type_n)
+              @@ !!type_ %(open_ type_n) %type_t_in %(close type_n)
+              @@ !!val_ %(open_ val_n) %value_t_in %(close val_n) )
 
 let rec text_element_in input =
   let raw s = Raw s in
@@ -362,64 +362,64 @@ let rec text_element_in input =
   let reference Open rf txto Close = Ref(rf, txto) in
   let parser =
     Parser.(   !!raw %data
-            @@ !!code %(open_ code_n) %string_in %(close code_n)
-            @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
-            @@ !!italic %(open_ italic_n) %(list text_element_in) %(close italic_n)
-            @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
-            @@ !!center %(open_ center_n) %(list text_element_in) %(close center_n)
-            @@ !!left %(open_ left_n) %(list text_element_in) %(close left_n)
-            @@ !!right %(open_ right_n) %(list text_element_in) %(close right_n)
-            @@ !!super %(open_ superscript_n)
-                         %(list text_element_in)
-                       %(close superscript_n)
-            @@ !!sub %(open_ subscript_n) %(list text_element_in) %(close subscript_n)
-            @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
-            @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
-            @@ !!newline %(open_ newline_n) %(close newline_n)
-            @@ !!title %(open_ title_n) %(list text_element_in) %(close title_n)
-            @@ !!reference %(open_ ref_n)
-                             %reference_in
-                             %(opt (list text_element_in))
-                           %(close ref_n) )
+               @@ !!code %(open_ code_n) %string_in %(close code_n)
+               @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
+               @@ !!italic %(open_ italic_n) %(list text_element_in) %(close italic_n)
+               @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
+               @@ !!center %(open_ center_n) %(list text_element_in) %(close center_n)
+               @@ !!left %(open_ left_n) %(list text_element_in) %(close left_n)
+               @@ !!right %(open_ right_n) %(list text_element_in) %(close right_n)
+               @@ !!super %(open_ superscript_n)
+                  %(list text_element_in)
+                  %(close superscript_n)
+               @@ !!sub %(open_ subscript_n) %(list text_element_in) %(close subscript_n)
+               @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
+               @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
+               @@ !!newline %(open_ newline_n) %(close newline_n)
+               @@ !!title %(open_ title_n) %(list text_element_in) %(close title_n)
+               @@ !!reference %(open_ ref_n)
+                  %reference_in
+                  %(opt (list text_element_in))
+                  %(close ref_n) )
   in
-    parser input
+  parser input
 
 and item_in input =
   let action Open txt Close = txt in
   let parser =
     Parser.( !!action %(open_ item_n) %(list text_element_in) %(close item_n) )
   in
-    parser input
+  parser input
 
 let doc_in =
   let none = {info = []} in
   let doc Open info Close = {info} in
-    Parser.( !!none
-             @@ !!doc %(open_ doc_n) %(list text_element_in) %(close doc_n) )
+  Parser.( !!none
+           @@ !!doc %(open_ doc_n) %(list text_element_in) %(close doc_n) )
 
 let type_path_in =
   let known Open path Close = Known path in
   let unknown string = Unknown string in
-    Parser.(   !!known %(open_ path_n) %type_t_in %(close path_n)
-            @@ !!unknown %name_in )
+  Parser.(   !!known %(open_ path_n) %type_t_in %(close path_n)
+             @@ !!unknown %name_in )
 
 let module_type_path_in =
   let known Open path Close : module_type_path = Known path in
   let unknown string : module_type_path = Unknown string in
-    Parser.(   !!known %(open_ path_n) %module_type_t_in %(close path_n)
-            @@ !!unknown %name_in )
+  Parser.(   !!known %(open_ path_n) %module_type_t_in %(close path_n)
+             @@ !!unknown %name_in )
 
 let module_path_in =
   let known Open path Close : module_path = Known path in
   let unknown string : module_path = Unknown string in
-    Parser.(   !!known %(open_ path_n) %module_t_in %(close path_n)
-            @@ !!unknown %name_in )
+  Parser.(   !!known %(open_ path_n) %module_t_in %(close path_n)
+             @@ !!unknown %name_in )
 
 let label_in =
   let label Open string Close = Label string in
   let default Open string Close = Default string in
-    Parser.(   !!label %(open_ label_n) %data %(close label_n)
-            @@ !!default %(open_ default_n) %data %(close default_n) )
+  Parser.(   !!label %(open_ label_n) %data %(close label_n)
+             @@ !!default %(open_ default_n) %data %(close default_n) )
 
 let rec type_expr_in input =
   let var Open string Close = Var string in
@@ -429,77 +429,77 @@ let rec type_expr_in input =
   let constr Open path typs Close = Constr(path, typs) in
   let parser =
     Parser.(   !!var %(open_ var_n) %data %(close var_n)
-            @@ !!alias %(open_ alias_n)
-                         %type_expr_in %(open_ var_n) %data %(close var_n)
-                       %(close alias_n)
-            @@ !!arrow %(open_ arrow_n)
-                         %(opt label_in) %type_expr_in %type_expr_in
-                       %(close arrow_n)
-            @@ !!tuple %(open_ tuple_n) %(list type_expr_in) %(close tuple_n)
-            @@ !!constr %(open_ constr_n)
-                          %type_path_in %(list type_expr_in)
-                        %(close constr_n) )
+               @@ !!alias %(open_ alias_n)
+                  %type_expr_in %(open_ var_n) %data %(close var_n)
+                  %(close alias_n)
+               @@ !!arrow %(open_ arrow_n)
+                  %(opt label_in) %type_expr_in %type_expr_in
+                  %(close arrow_n)
+               @@ !!tuple %(open_ tuple_n) %(list type_expr_in) %(close tuple_n)
+               @@ !!constr %(open_ constr_n)
+                  %type_path_in %(list type_expr_in)
+                  %(close constr_n) )
   in
-    parser input
+  parser input
 
 let val_in =
   let action Open name doc type_ Close =
     {name = Value.Name.of_string name; doc; type_}
   in
-    Parser.( !!action %(open_ val_n)
-                        %name_in %doc_in %type_expr_in
-                      %(close val_n) )
+  Parser.( !!action %(open_ val_n)
+           %name_in %doc_in %type_expr_in
+           %(close val_n) )
 
 let field_in =
   let action Open name doc type_ Close : field =
     {name = Field.Name.of_string name; doc; type_}
   in
-    Parser.( !!action %(open_ field_n)
-                        %name_in %doc_in %type_expr_in
-                      %(close field_n) )
+  Parser.( !!action %(open_ field_n)
+           %name_in %doc_in %type_expr_in
+           %(close field_n) )
 
 let ret_in =
   let action Open typ Close = typ in
-    Parser.( !!action %(open_ return_n) %type_expr_in %(close return_n) )
+  Parser.( !!action %(open_ return_n) %type_expr_in %(close return_n) )
 
 let arg_in =
   let action Open typ Close = typ in
-    Parser.( !!action %(open_ arg_n) %type_expr_in %(close arg_n) )
+  Parser.( !!action %(open_ arg_n) %type_expr_in %(close arg_n) )
 
 let constructor_in =
   let action Open name doc args ret Close =
     {name = Constructor.Name.of_string name; doc; args; ret;}
   in
-    Parser.( !!action %(open_ constructor_n)
-                        %name_in %doc_in %(list arg_in) %(opt ret_in)
-                      %(close constructor_n) )
+  Parser.( !!action %(open_ constructor_n)
+           %name_in %doc_in %(list arg_in) %(opt ret_in)
+           %(close constructor_n) )
 
 let type_kind_in =
   let abstract = None in
   let variant Open cstrs Close = Some (Variant cstrs) in
   let record Open fields Close = Some (Record fields) in
-    Parser.(   !!abstract
-            @@ !!variant %(open_ variant_n)
-                           %(seq constructor_in)
-                         %(close variant_n)
-            @@ !!record %(open_ record_n) %(seq field_in) %(close record_n) )
+  Parser.(   !!abstract
+             @@ !!variant %(open_ variant_n)
+                %(seq constructor_in)
+                %(close variant_n)
+             @@ !!record %(open_ record_n) %(seq field_in) %(close record_n) )
 
 let manifest_in =
   let action Open typ Close = typ in
-    Parser.( !!action %(open_ manifest_n) %type_expr_in %(close manifest_n) )
+  Parser.( !!action %(open_ manifest_n) %type_expr_in %(close manifest_n) )
 
 let param_in =
   let action Open string Close = string in
-    Parser.( !!action %(open_ param_n) %data %(close param_n) )
+  Parser.( !!action %(open_ param_n) %data %(close param_n) )
 
 let type_decl_in =
   let action Open name doc param manifest decl Close =
     {name = Type.Name.of_string name; doc; param; manifest; decl}
   in
-    Parser.( !!action %(open_ type_n)
-                        %name_in %doc_in %(list param_in)
-                        %(opt manifest_in) %type_kind_in
-                      %(close type_n) )
+  Parser.( !!action %(open_ type_n)
+           %name_in %doc_in %(list param_in)
+           %(opt manifest_in) %type_kind_in
+           %(close type_n) )
 
 let nested_module_type_in =
   let action Open name doc desc Close =
@@ -508,13 +508,13 @@ let nested_module_type_in =
   let abstract = Abstract in
   let path path = Manifest (Path path) in
   let sign Open Close = Manifest Signature in
-    Parser.( !!action %(open_ module_type_n)
-                         %name_in %doc_in
-                         %(   !!abstract
-                           @@ !!path %module_type_path_in
-                           @@ !!sign %(open_ signature_n)
-                                     %(close signature_n) )
-                      %(close module_type_n) )
+  Parser.( !!action %(open_ module_type_n)
+           %name_in %doc_in
+           %(   !!abstract
+                @@ !!path %module_type_path_in
+                @@ !!sign %(open_ signature_n)
+                   %(close signature_n) )
+           %(close module_type_n) )
 
 let nested_module_in =
   let action Open name doc desc Close : nested_module =
@@ -523,13 +523,13 @@ let nested_module_in =
   let alias Open path Close : nested_module_desc= Alias path in
   let path path : nested_module_desc = Type (Path path) in
   let sign Open Close : nested_module_desc = Type Signature in
-    Parser.( !!action %(open_ module_n) %name_in %doc_in
-                        %(   !!alias %(open_ alias_n)
-                                       %module_path_in
-                                     %(close alias_n)
-                          @@ !!path %module_type_path_in
-                          @@ !!sign %(open_ signature_n) %(close signature_n) )
-                     %(close module_n) )
+  Parser.( !!action %(open_ module_n) %name_in %doc_in
+           %(   !!alias %(open_ alias_n)
+                %module_path_in
+                %(close alias_n)
+                @@ !!path %module_type_path_in
+                @@ !!sign %(open_ signature_n) %(close signature_n) )
+           %(close module_n) )
 
 let signature_item_in =
   let val_ v : signature_item = Val v in
@@ -539,72 +539,72 @@ let signature_item_in =
   let modules Open mds Close = Modules mds in
   let module_type mtd : signature_item = ModuleType mtd in
   let comment Open info Close = Comment {info} in
-    Parser.(   !!val_ %val_in
-            @@ !!type_ %type_decl_in
-            @@ !!types %(open_ types_n) %(seq type_decl_in) %(close types_n)
-            @@ !!module_ %nested_module_in
-            @@ !!modules %(open_ modules_n)
-                             %(seq nested_module_in)
-                           %(close modules_n)
-            @@ !!module_type %nested_module_type_in
-            @@ !!comment %(open_ comment_n)
-                             %(list text_element_in)
-                           %(close comment_n) )
+  Parser.(   !!val_ %val_in
+             @@ !!type_ %type_decl_in
+             @@ !!types %(open_ types_n) %(seq type_decl_in) %(close types_n)
+             @@ !!module_ %nested_module_in
+             @@ !!modules %(open_ modules_n)
+                %(seq nested_module_in)
+                %(close modules_n)
+             @@ !!module_type %nested_module_type_in
+             @@ !!comment %(open_ comment_n)
+                %(list text_element_in)
+                %(close comment_n) )
 
 let module_type_expr_in =
   let action Open sg Close : module_type_expr = Signature sg in
-    Parser.( !!action %(open_ signature_n)
-                        %(list signature_item_in)
-                      %(close signature_n) )
+  Parser.( !!action %(open_ signature_n)
+           %(list signature_item_in)
+           %(close signature_n) )
 
 let module_alias_in =
   let action Open path Close = path in
-    Parser.( !!action %(open_ alias_n) %module_path_in %(close alias_n) )
+  Parser.( !!action %(open_ alias_n) %module_path_in %(close alias_n) )
 
 
 let module_type_in =
   let action Open Open path Close doc alias expr Close =
     { path; doc; alias; expr; }
   in
-    Parser.( !!action %(open_ module_type_n)
-                        %(open_ path_n)
-                          %module_type_t_in
-                        %(close path_n)
-                        %doc_in
-                        %(opt module_type_path_in) %(opt module_type_expr_in)
-                      %(close module_type_n) )
+  Parser.( !!action %(open_ module_type_n)
+           %(open_ path_n)
+           %module_type_t_in
+           %(close path_n)
+           %doc_in
+           %(opt module_type_path_in) %(opt module_type_expr_in)
+           %(close module_type_n) )
 
 let module_in =
   let action Open Open path Close doc alias type_path type_ Close =
     { path; doc; alias; type_path; type_; }
   in
   Parser.( !!action %(open_ module_n)
-                      %(open_ path_n)
-                        %module_t_in
-                      %(close path_n)
-                      %doc_in %(opt module_alias_in)
-                      %(opt module_type_path_in) %(opt module_type_expr_in)
-                    %(close module_n) )
+           %(open_ path_n)
+           %module_t_in
+           %(close path_n)
+           %doc_in %(opt module_alias_in)
+           %(opt module_type_path_in) %(opt module_type_expr_in)
+           %(close module_n) )
 
 let library_in =
   let action Open path modules Close = { path; modules; } in
   let modl Open name Close = Module.Name.of_string name in
-    Parser.( !!action %(open_ library_n)
-                        %library_t_in
-                        %(list (!!modl %(open_ module_n) %name_in  %(close module_n)))
-                      %(close library_n) )
+  Parser.( !!action %(open_ library_n)
+           %library_t_in
+           %(list (!!modl %(open_ module_n) %name_in  %(close module_n)))
+           %(close library_n) )
 
 let package_in =
   let action Open path libraries Close = { path; libraries; } in
   let lib Open name Close = Library.Name.of_string name in
-    Parser.( !!action %(open_ package_n)
-                        %package_t_in
-                        %(list (!!lib %(open_ library_n) %name_in  %(close library_n)))
-                      %(close package_n) )
+  Parser.( !!action %(open_ package_n)
+           %package_t_in
+           %(list (!!lib %(open_ library_n) %name_in  %(close library_n)))
+           %(close package_n) )
 
 let file p =
   let action dtd x = x in
-    Parser.( !!action %dtd %p )
+  Parser.( !!action %dtd %p )
 
 let module_of_xml input = Parser.run (file module_in) input
 
@@ -653,17 +653,17 @@ let name_out output name =
 
 let package_t_out output package =
   let name = Package.to_string package in
-    open_ output package_n;
-    name_out output name;
-    close output package_n
+  open_ output package_n;
+  name_out output name;
+  close output package_n
 
 let library_t_out output lib =
   let package = Library.package lib in
   let name = Library.Name.to_string (Library.name lib) in
-    open_ output library_n;
-    package_t_out output package;
-    name_out output name;
-    close output library_n
+  open_ output library_n;
+  package_t_out output package;
+  name_out output name;
+  close output library_n
 
 let rec module_t_out output md =
   let parent_out output md =
@@ -672,34 +672,34 @@ let rec module_t_out output md =
     | None -> library_t_out output (Module.library md)
   in
   let name = Module.Name.to_string (Module.name md) in
-    open_ output module_n;
-    parent_out output md;
-    name_out output name;
-    close output module_n
+  open_ output module_n;
+  parent_out output md;
+  name_out output name;
+  close output module_n
 
 let module_type_t_out output mty =
   let parent = ModuleType.parent mty in
   let name = ModuleType.Name.to_string (ModuleType.name mty) in
-    open_ output module_type_n;
-    module_t_out output parent;
-    name_out output name;
-    close output module_type_n
+  open_ output module_type_n;
+  module_t_out output parent;
+  name_out output name;
+  close output module_type_n
 
 let type_t_out output typ =
   let parent = Type.parent typ in
   let name = Type.Name.to_string (Type.name typ) in
-    open_ output type_n;
-    module_t_out output parent;
-    name_out output name;
-    close output type_n
+  open_ output type_n;
+  module_t_out output parent;
+  name_out output name;
+  close output type_n
 
 let value_t_out output v =
   let parent = Value.parent v in
   let name = Value.Name.to_string (Value.name v) in
-    open_ output val_n;
-    module_t_out output parent;
-    name_out output name;
-    close output val_n
+  open_ output val_n;
+  module_t_out output parent;
+  name_out output name;
+  close output val_n
 
 let reference_out output = function
   | Module md -> module_t_out output md
@@ -908,28 +908,28 @@ let nested_module_type_out output {name; doc; desc} =
         open_ output signature_n;
         close output signature_n
   in
-    open_ output module_type_n;
-    name_out output (ModuleType.Name.to_string name);
-    doc_out output doc;
-    module_type_desc_out output desc;
-    close output module_type_n
+  open_ output module_type_n;
+  name_out output (ModuleType.Name.to_string name);
+  doc_out output doc;
+  module_type_desc_out output desc;
+  close output module_type_n
 
 let nested_module_out output ({name; doc; desc} : nested_module) =
- let module_desc_out output : nested_module_desc -> unit = function
-   | Alias path ->
-       open_ output alias_n;
-       module_path_out output path;
-       close output alias_n
-   | Type (Path path) -> module_type_path_out output path
-   | Type Signature ->
-       open_ output signature_n;
-       close output signature_n
- in
-   open_ output module_n;
-   name_out output (Module.Name.to_string name);
-   doc_out output doc;
-   module_desc_out output desc;
-   close output module_n
+  let module_desc_out output : nested_module_desc -> unit = function
+    | Alias path ->
+        open_ output alias_n;
+        module_path_out output path;
+        close output alias_n
+    | Type (Path path) -> module_type_path_out output path
+    | Type Signature ->
+        open_ output signature_n;
+        close output signature_n
+  in
+  open_ output module_n;
+  name_out output (Module.Name.to_string name);
+  doc_out output doc;
+  module_desc_out output desc;
+  close output module_n
 
 let signature_item_out output : signature_item -> unit = function
   | Val v -> val_out output v
@@ -951,14 +951,14 @@ let signature_item_out output : signature_item -> unit = function
 
 
 let module_type_expr_out output (Signature sg : module_type_expr) =
-    open_ output signature_n;
-    list signature_item_out output sg;
-    close output signature_n
+  open_ output signature_n;
+  list signature_item_out output sg;
+  close output signature_n
 
 let module_alias_out output path =
-    open_ output alias_n;
-    module_path_out output path;
-    close output alias_n
+  open_ output alias_n;
+  module_path_out output path;
+  close output alias_n
 
 let module_type_out output { path; doc; alias; expr; } =
   open_ output module_type_n;
@@ -987,10 +987,10 @@ let library_out output { path; modules; } =
     name_out output (Module.Name.to_string name);
     close output module_n;
   in
-    open_ output library_n;
-    library_t_out output path;
-    list mod_out output modules;
-    close output library_n
+  open_ output library_n;
+  library_t_out output path;
+  list mod_out output modules;
+  close output library_n
 
 let package_out output { path; libraries; } =
   let lib_out output name =
@@ -998,10 +998,10 @@ let package_out output { path; libraries; } =
     name_out output (Library.Name.to_string name);
     close output library_n;
   in
-    open_ output package_n;
-    package_t_out output path;
-    list lib_out output libraries;
-    close output package_n
+  open_ output package_n;
+  package_t_out output path;
+  list lib_out output libraries;
+  close output package_n
 
 let file p output x =
   dtd output None;

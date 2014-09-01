@@ -15,5 +15,5 @@
  *)
 
 val read_interface_tree: OpamDocPath.resolver -> OpamDocPath.Module.t ->
-                         Typedtree.signature -> OpamDocTypes.api
+  Typedtree.signature -> OpamDocTypes.api
 

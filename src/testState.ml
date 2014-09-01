@@ -23,14 +23,14 @@ let parse_module_path pkg lib md =
   let rec loop = function
     | Longident.Lident s ->
         let name = Module.Name.of_string s in
-          Module.create lib name
+        Module.create lib name
     | Longident.Ldot(p, s) ->
         let name = Module.Name.of_string s in
-          Module.create_submodule (loop p) name
+        Module.create_submodule (loop p) name
     | Longident.Lapply _ ->
         OpamGlobals.error_and_exit "Bad module identifier %s" md
   in
-    loop (Longident.parse md)
+  loop (Longident.parse md)
 
 let check_package t pkg =
   if Package.Set.mem pkg t.installed then ()
@@ -70,8 +70,8 @@ let test package library module_ =
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
   let () = OpamDocXml.module_to_xml output intf in
-    Buffer.output_buffer stdout buf;
-    ()
+  Buffer.output_buffer stdout buf;
+  ()
 
 open Cmdliner
 
@@ -90,7 +90,7 @@ let module_ =
 let test =
   let doc = "Test opam-doc-base state" in
   let info = Term.info ~doc "opam-doc-test-state" in
-    (Term.(pure test $package $library $module_), info)
+  (Term.(pure test $package $library $module_), info)
 
 let () =
   try

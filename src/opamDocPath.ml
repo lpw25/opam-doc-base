@@ -25,7 +25,7 @@ let check_uident x =
   else
     match x.[0] with
     | 'A' .. 'Z' ->
-      let ok = ref true in
+        let ok = ref true in
         for i = 1 to (len - 1) do
           match x.[i] with
           | 'A' .. 'Z'
@@ -43,7 +43,7 @@ let check_lident x =
   else
     match x.[0] with
     | 'a' .. 'z' | '_' ->
-      let ok = ref true in
+        let ok = ref true in
         for i = 1 to (len - 1) do
           match x.[i] with
           | 'A' .. 'Z'
@@ -63,14 +63,14 @@ let check_operator x =
       if (len > 2) && (x.[0] = '(') && (x.[len - 1] = ')') then 1, len-2
       else 0, len-1
     in
-      if not (String.contains "=<>@^|&+-*/$%!?~" x.[first]) then None
-      else
-        let ok = ref true in
-          for i = first + 1 to last - 1 do
-            if not (String.contains "!$%&*+-./:<=>?@^|~" x.[i]) then ok := false
-          done;
-          if !ok then Some (String.sub x first ((last - first) + 1))
-          else None
+    if not (String.contains "=<>@^|&+-*/$%!?~" x.[first]) then None
+    else
+      let ok = ref true in
+      for i = first + 1 to last - 1 do
+        if not (String.contains "!$%&*+-./:<=>?@^|~" x.[i]) then ok := false
+      done;
+      if !ok then Some (String.sub x first ((last - first) + 1))
+      else None
 
 module UName = struct
 
@@ -141,8 +141,8 @@ module ValName = struct
   let of_string x =
     if check_lident x then x
     else match check_operator x with
-    | Some x -> "(" ^ x ^ ")"
-    | None -> failwith ("Invalid name " ^ x)
+      | Some x -> "(" ^ x ^ ")"
+      | None -> failwith ("Invalid name " ^ x)
 
   let to_json s = `String s
 
@@ -214,20 +214,20 @@ module Module = struct
       | None, Some par1, None, Some par2 -> compare par1 par2
       | Some _, None, None, Some par2 ->
           let c = compare md1 par2 in
-            if c = 0 then -1 else c
+          if c = 0 then -1 else c
       | None, Some par1, Some _, None ->
           let c = compare par1 md2 in
-            if c = 0 then 1 else c
+          if c = 0 then 1 else c
       | _, _, _, _ -> assert false
     in
-      if c = 0 then Name.compare md1.name md2.name
-      else c
+    if c = 0 then Name.compare md1.name md2.name
+    else c
 
   let rec to_json md =
     match md.library, md.parent with
     | Some lib, None ->
-    `O [ ("library", OpamLibrary.to_json lib);
-         ("name", `String (Name.to_string md.name)); ]
+        `O [ ("library", OpamLibrary.to_json lib);
+             ("name", `String (Name.to_string md.name)); ]
     | None, Some par ->
         `O [ ("parent", to_json par);
              ("name", `String (Name.to_string md.name)); ]

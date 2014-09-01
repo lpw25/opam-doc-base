@@ -28,8 +28,8 @@ let test cmi =
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
   let () = OpamDocXml.module_to_xml output intf in
-    Buffer.output_buffer stdout buf;
-    ()
+  Buffer.output_buffer stdout buf;
+  ()
 
 open Cmdliner
 
@@ -40,7 +40,7 @@ let cmi =
 let test =
   let doc = "Test opam-doc-base on cmi files" in
   let info = Term.info ~doc "opam-doc-test-cmi" in
-    (Term.(pure test $cmi), info)
+  (Term.(pure test $cmi), info)
 
 let () =
   try
