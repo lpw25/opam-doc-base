@@ -179,6 +179,7 @@ and reference =
   | ModuleType of ModuleType.t
   | Type of Type.t
   | Val of Value.t
+  | Link of string
 
 type api =
   { modules: module_ OpamDocPath.Module.Map.t;

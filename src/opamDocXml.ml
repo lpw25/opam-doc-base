@@ -75,6 +75,7 @@ let ref_n: Xmlm.name = ("","ref")
 let level_n: Xmlm.name = ("","level")
 let label_n: Xmlm.name = ("","label")
 let target_n: Xmlm.name = ("","target")
+let link_n: Xmlm.name = ("","link")
 
 (* XML parser combinators *)
 
@@ -349,11 +350,13 @@ let reference_in =
   let module_type (Open, _) path Close = ModuleType path in
   let type_ (Open, _) path Close = Type path in
   let val_ (Open, _) path Close = Val path in
+  let link_ (Open, _) path Close = Link path in
   let open Parser in
   !!module_ %(open_ module_n) %module_t_in %(close module_n)
   @@ !!module_type %(open_ module_type_n) %module_type_t_in %(close module_type_n)
   @@ !!type_ %(open_ type_n) %type_t_in %(close type_n)
   @@ !!val_ %(open_ val_n) %value_t_in %(close val_n)
+  @@ !!link_ %(open_ link_n) %string_in %(close link_n)
 
 let rec text_element_in input =
   let raw s = Raw s in
@@ -736,11 +739,17 @@ let value_t_out output v =
   name_out output name;
   close output val_n
 
+let link_t_out output href =
+  open_ output link_n;
+  string_out output href;
+  close output link_n
+
 let reference_out output = function
   | Module md -> module_t_out output md
   | ModuleType mty -> module_type_t_out output mty
   | Type typ -> type_t_out output typ
   | Val v -> value_t_out output v
+  | Link s -> link_t_out output s
 
 let rec text_element_out output = function
   | Raw s -> data output s

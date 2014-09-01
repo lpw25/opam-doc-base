@@ -88,6 +88,11 @@ and read_text_element res : Documentation.text_element -> text = function
       | Some p, None -> [Ref(Val p, None)]
       | Some p, Some txt -> [Ref(Val p, Some (read_text res txt))]
     end
+  | Ref(RK_link, uri, txt) -> begin
+      match txt with
+      | None   -> [Ref (Link uri, None)]
+      | Some t -> [Ref (Link uri, Some (read_text res t))]
+    end
   | Ref(_, _, Some txt) -> read_text res txt
   | Ref(_, s, None) -> [Raw s]
   | Special_ref _ -> raise Not_implemented
