@@ -60,6 +60,7 @@ and signature_item =
   | Modules of nested_module list
   | ModuleType of nested_module_type
   | Comment of doc
+  | SIG_todo of string
 
 (** {3 Nested modules} *)
 
@@ -71,6 +72,7 @@ and nested_module =
 and nested_module_desc =
   | Alias of module_path
   | Type of nested_module_type_expr
+  | MODULE_todo of string
 
 and nested_module_type =
   { name: ModuleType.Name.t;
@@ -80,6 +82,7 @@ and nested_module_type =
 and nested_module_type_desc =
   | Manifest of nested_module_type_expr
   | Abstract
+  | MODULE_TYPE_todo of string
 
 and nested_module_type_expr =
   | Signature
@@ -97,6 +100,7 @@ and type_ =
 and type_decl =
   | Variant of constructor list
   | Record of field list
+  | TYPE_todo of string
 
 and constructor =
   { name: Constructor.Name.t;
@@ -124,6 +128,7 @@ and type_expr =
   | Arrow of label option * type_expr * type_expr
   | Tuple of type_expr list
   | Constr of type_path * type_expr list
+  | TYPE_EXPR_todo of string
 
 and label =
   | Label of string
@@ -163,7 +168,7 @@ and text_element =
   | Title of int * string option * text
   | Ref of reference * text option
   | Target of string option * string
-  | Not_implemented of string
+  | TEXT_todo of string
 
 and style =
   | Bold

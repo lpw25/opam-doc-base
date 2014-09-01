@@ -21,8 +21,6 @@ open Parsetree
 open Types
 open OpamDocTypes
 
-exception Not_implemented
-
 let map_opt f = function
   | None -> None
   | Some x -> Some (f x)
@@ -99,8 +97,8 @@ and read_text_element res : Documentation.text_element -> text = function
       | None   -> [Ref (Link uri, None)]
       | Some t -> [Ref (Link uri, Some (read_text res t))]
     end
-  | Ref(_, s, _)  -> [Not_implemented ("ref:"^s)]
-  | Special_ref _ -> [Not_implemented "special-ref"]
+  | Ref(_, s, _)  -> [TEXT_todo ("ref:"^s)]
+  | Special_ref _ -> [TEXT_todo "special-ref"]
   | Target (target, code) -> [Target (target, code)]
 
 and read_text res txt =
@@ -245,7 +243,7 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
           let typs = List.map (read_type_expr res) typs in
           Constr(p, typs)
       | Tsubst typ -> read_type_expr res typ
-      | _ -> raise Not_implemented
+      | _ -> TYPE_EXPR_todo (name_of_type typ)
     in
     match alias with
     | Some name -> Alias(typ, name)
@@ -266,7 +264,7 @@ let read_value_description res id (v : Types.value_description) =
 let rec read_type_param res (typ : Types.type_expr) =
   match read_type_expr res typ with
   | Var v -> v
-  | _ -> raise Not_implemented
+  | _ -> "todo"
 
 let read_constructor_declaration res (cd : Types.constructor_declaration) =
   { name = Constructor.Name.of_string (Ident.name cd.cd_id);
@@ -285,7 +283,7 @@ let read_type_kind res : Types.type_kind -> type_decl option = function
       Some (Variant (List.map (read_constructor_declaration res) cds))
   | Type_record(lds, _) ->
       Some (Record (List.map (read_label_declaration res) lds))
-  | Type_open -> raise Not_implemented
+  | Type_open ->  Some (TYPE_todo "type_open")
 
 let read_type_declaration res id (decl : Types.type_declaration) =
   reset_names ();
@@ -330,7 +328,7 @@ let rec read_module_declaration res path api id (md : Types.module_declaration) 
           { api with modules = Module.Map.add path modl api.modules }
         in
         Type Signature, api
-    | Mty_functor _ -> raise Not_implemented
+    | Mty_functor _ -> MODULE_todo ("functor:"^Module.to_string path), api
     | Mty_alias p ->
         let p : module_path =
           match find_module res p with
@@ -389,64 +387,48 @@ and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) 
             module_types = ModuleType.Map.add path mty api.module_types }
         in
         Manifest Signature, api
-    | Some (Mty_functor _) -> raise Not_implemented
+    | Some (Mty_functor _) ->
+        MODULE_TYPE_todo ("functor:"^ModuleType.to_string path), api
     | Some (Mty_alias _) -> assert false
   in
   let mtd = { name; doc; desc = desc; } in
   mtd, api
 
 and read_signature res path api (acc : signature) = function
-  | Sig_value(id, v) :: rest -> begin
-      try
-        let v = read_value_description res id v in
-        read_signature res path api ((Val v) :: acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_type(id, decl, Trec_first) :: rest -> begin
-      try
-        let decl = read_type_declaration res id decl in
-        let rec loop acc' = function
-          | Sig_type(id, decl, Trec_next) :: rest ->
-              let decl = read_type_declaration res id decl in
-              loop (decl :: acc') rest
-          | rest ->
-              read_signature res path api (Types(List.rev acc') :: acc) rest
-        in
-        loop [decl] rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_type(id, decl, _) :: rest -> begin
-      try
-        let decl = read_type_declaration res id decl in
-        read_signature res path api ((Types [decl]) ::  acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_module(id, md, Trec_first) :: rest -> begin
-      try
-        let md, api = read_module_declaration res path api id md in
-        let rec loop api acc' = function
-          | Sig_module(id, md, Trec_next) :: rest ->
-              let md, api = read_module_declaration res path api id md in
-              loop api (md :: acc') rest
-          | rest ->
-              read_signature res path api (Modules(List.rev acc') :: acc) rest
-        in
-        loop api [md] rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_module(id, md, _) :: rest -> begin
-      try
-        let md, api = read_module_declaration res path api id md in
-        read_signature res path api ((Modules [md]) :: acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_modtype(id, mtd) :: rest -> begin
-      try
-        let mtd, api = read_modtype_declaration res path api id mtd in
-        read_signature res path api ((ModuleType mtd) :: acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | _ :: rest -> read_signature res path api acc rest
+  | Sig_value(id, v) :: rest ->
+      let v = read_value_description res id v in
+      read_signature res path api ((Val v) :: acc) rest
+  | Sig_type(id, decl, Trec_first) :: rest ->
+      let decl = read_type_declaration res id decl in
+      let rec loop acc' = function
+        | Sig_type(id, decl, Trec_next) :: rest ->
+            let decl = read_type_declaration res id decl in
+            loop (decl :: acc') rest
+        | rest ->
+            read_signature res path api (Types(List.rev acc') :: acc) rest
+      in
+      loop [decl] rest
+  | Sig_type(id, decl, _) :: rest ->
+      let decl = read_type_declaration res id decl in
+      read_signature res path api ((Types [decl]) ::  acc) rest
+  | Sig_module(id, md, Trec_first) :: rest ->
+      let md, api = read_module_declaration res path api id md in
+      let rec loop api acc' = function
+        | Sig_module(id, md, Trec_next) :: rest ->
+            let md, api = read_module_declaration res path api id md in
+            loop api (md :: acc') rest
+        | rest ->
+            read_signature res path api (Modules(List.rev acc') :: acc) rest
+      in
+      loop api [md] rest
+  | Sig_module(id, md, _) :: rest ->
+      let md, api = read_module_declaration res path api id md in
+      read_signature res path api ((Modules [md]) :: acc) rest
+  | Sig_modtype(id, mtd) :: rest ->
+      let mtd, api = read_modtype_declaration res path api id mtd in
+      read_signature res path api ((ModuleType mtd) :: acc) rest
+  | x :: rest ->
+      read_signature res path api (SIG_todo (Module.to_string path) :: acc) rest
   | [] -> Signature (List.rev acc), api
 
 let read_interface res path intf =

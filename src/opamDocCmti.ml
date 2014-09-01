@@ -21,8 +21,6 @@ open Parsetree
 open Typedtree
 open OpamDocTypes
 
-exception Not_implemented
-
 let read_comment res : Parsetree.attribute -> doc option = function
   | ({txt = "comment"}, PDoc(d, _)) ->
       let info = OpamDocCmi.read_documentation res d in
@@ -89,57 +87,37 @@ and read_modtype_declaration res path' api mtd =
 
 and read_signature_item res path api item : (signature_item * api) option =
   match item.sig_desc with
-  | Tsig_value vd -> begin
-      try
-        let v =
-          OpamDocCmi.read_value_description res vd.val_id vd.val_val
-        in
-        Some (Val v, api)
-      with Not_implemented -> None
-    end
-  | Tsig_type decls -> begin
-      try
-        let decls =
-          List.map
-            (fun decl ->
-               OpamDocCmi.read_type_declaration res decl.typ_id decl.typ_type)
-            decls
-        in
-        Some (Types decls, api)
-      with Not_implemented -> None
-    end
-  | Tsig_module md -> begin
-      try
-        let md, api = read_module_declaration res path api md in
-        Some (Modules [md], api)
-      with Not_implemented -> None
-    end
-  | Tsig_recmodule mds -> begin
-      try
-        let mds, api =
-          List.fold_left
-            (fun (mds, api) md ->
-               let md, api = read_module_declaration res path api md in
-               (md :: mds), api)
-            ([], api) mds
-        in
-        Some (Modules (List.rev mds), api)
-      with Not_implemented -> None
-    end
-  | Tsig_modtype mtd -> begin
-      try
-        let mtd, api = read_modtype_declaration res path api mtd in
-        Some (ModuleType mtd, api)
-      with Not_implemented -> None
-    end
+  | Tsig_value vd ->
+      let v = OpamDocCmi.read_value_description res vd.val_id vd.val_val in
+      Some (Val v, api)
+  | Tsig_type decls ->
+      let decls =
+        List.map (fun decl ->
+            OpamDocCmi.read_type_declaration res decl.typ_id decl.typ_type
+          ) decls
+      in
+      Some (Types decls, api)
+  | Tsig_module md ->
+      let md, api = read_module_declaration res path api md in
+      Some (Modules [md], api)
+  | Tsig_recmodule mds ->
+      let mds, api =
+        List.fold_left
+          (fun (mds, api) md ->
+             let md, api = read_module_declaration res path api md in
+             (md :: mds), api)
+          ([], api) mds
+      in
+      Some (Modules (List.rev mds), api)
+  | Tsig_modtype mtd ->
+      let mtd, api = read_modtype_declaration res path api mtd in
+      Some (ModuleType mtd, api)
   | Tsig_attribute attr -> begin
-      try
-        match read_comment res attr with
-        | None -> None
-        | Some doc -> Some (Comment doc, api)
-      with Not_implemented -> None
+      match read_comment res attr with
+      | None -> None
+      | Some doc -> Some (Comment doc, api)
     end
-  | _ -> None
+  | _ -> Some (SIG_todo (Module.to_string path), api)
 
 and read_signature res path api sg =
   let items, api =
