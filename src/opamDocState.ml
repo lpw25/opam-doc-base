@@ -81,7 +81,7 @@ let read_xml parser file =
     OpamGlobals.error_and_exit "Missing file %s" (OpamFilename.prettify file);
   let ic = OpamFilename.open_in file in
     try
-      let input = Xmlm.make_input (`Channel ic) in
+      let input = Xmlm.make_input ~strip:true (`Channel ic) in
       let result = parser input in
         close_in ic;
         result
@@ -94,7 +94,7 @@ let read_xml parser file =
 let write_xml parser file x =
   let oc = OpamFilename.open_out file in
   try
-    let output = Xmlm.make_output (`Channel oc) in
+    let output = Xmlm.make_output ~indent:(Some 2) (`Channel oc) in
       parser output x;
       close_out oc
   with exn ->
