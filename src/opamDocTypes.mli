@@ -153,10 +153,13 @@ and text = text_element list
 and text_element =
   | Raw of string
   | Code of string
+  | PreCode of string
+  | Verbatim of string
   | Style of style * text
   | List of text list
   | Enum of text list
   | Newline
+  | Block of text
   | Title of int * string option * text
   | Ref of reference * text option
 

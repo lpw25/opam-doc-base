@@ -55,6 +55,8 @@ let comment_n: Xmlm.name = ("","comment")
 let doc_n: Xmlm.name = ("","doc")
 let info_n: Xmlm.name = ("","info")
 let code_n: Xmlm.name = ("","code")
+let precode_n: Xmlm.name = ("", "precode")
+let verbatim_n: Xmlm.name = ("", "verbatim")
 let bold_n: Xmlm.name = ("","bold")
 let italic_n: Xmlm.name = ("","italic")
 let emph_n: Xmlm.name = ("","emph")
@@ -66,6 +68,7 @@ let subscript_n: Xmlm.name = ("","subscript")
 let list_n: Xmlm.name = ("","list")
 let enum_n: Xmlm.name = ("","enum")
 let newline_n: Xmlm.name = ("","newline")
+let block_n: Xmlm.name = ("","block")
 let item_n: Xmlm.name = ("","item")
 let title_n: Xmlm.name = ("","title")
 let ref_n: Xmlm.name = ("","ref")
@@ -354,6 +357,8 @@ let reference_in =
 let rec text_element_in input =
   let raw s = Raw s in
   let code Open s Close = Code s in
+  let precode Open s Close = PreCode s in
+  let verbatim Open s Close = Verbatim s in
   let bold Open txt Close = Style(Bold, txt) in
   let italic Open txt Close = Style(Italic, txt) in
   let emph Open txt Close = Style(Emphasize, txt) in
@@ -365,11 +370,14 @@ let rec text_element_in input =
   let list_ Open items Close = List items in
   let enum Open items Close = Enum items in
   let newline Open Close = Newline in
+  let block Open txt Close = Block txt in
   let title Open i l txt Close = Title (i, l, txt) in
   let reference Open rf txto Close = Ref(rf, txto) in
   let parser =
     Parser.(   !!raw %data
                @@ !!code %(open_ code_n) %string_in %(close code_n)
+               @@ !!precode %(open_ precode_n) %string_in %(close precode_n)
+               @@ !!verbatim %(open_ verbatim_n) %string_in %(close verbatim_n)
                @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
                @@ !!italic %(open_ italic_n) %(list text_element_in)
                   %(close italic_n)
@@ -387,6 +395,8 @@ let rec text_element_in input =
                @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
                @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
                @@ !!newline %(open_ newline_n) %(close newline_n)
+               @@ !!block %(open_ block_n) %(list text_element_in)
+                  %(close block_n)
                @@ !!title %(open_ title_n)
                   %int_in %(opt string_in) %(list text_element_in)
                   %(close title_n)
@@ -730,6 +740,14 @@ let rec text_element_out output = function
       open_ output code_n;
       string_out output s;
       close output code_n
+  | PreCode s ->
+      open_ output precode_n;
+      string_out output s;
+      close output precode_n
+  | Verbatim s ->
+      open_ output verbatim_n;
+      string_out output s;
+      close output verbatim_n
   | Style(Bold, txt) ->
       open_ output bold_n;
       list text_element_out output txt;
@@ -773,6 +791,10 @@ let rec text_element_out output = function
   | Newline ->
       open_ output newline_n;
       close output newline_n
+  | Block txt ->
+      open_ output block_n;
+      list text_element_out output txt;
+      close output block_n
   | Title (i, l, txt) ->
       open_ output title_n;
       int_out output i;
