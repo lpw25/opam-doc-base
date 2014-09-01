@@ -49,7 +49,7 @@ and read_text_element res : Documentation.text_element -> text = function
   | List l -> [List(List.map (read_text res) l)]
   | Enum l -> [Enum(List.map (read_text res) l)]
   | Newline -> [Newline]
-  | Title(_, _, txt) -> [Title (read_text res txt)]
+  | Title(i, l, txt) -> [Title (i, l, read_text res txt)]
   | Ref(RK_module, s, txt) -> begin
       match lookup_module res s, txt with
       | None, None -> [Raw s]

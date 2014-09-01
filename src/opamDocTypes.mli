@@ -157,7 +157,7 @@ and text_element =
   | List of text list
   | Enum of text list
   | Newline
-  | Title of text
+  | Title of int * string option * text
   | Ref of reference * text option
 
 and style =

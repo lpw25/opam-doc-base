@@ -271,6 +271,13 @@ let string_in =
   in
   Parser.( !!action %(opt data) )
 
+let int_in =
+  let action = function
+    | None   -> 0
+    | Some i -> try int_of_string i with Failure _ -> 0
+  in
+  Parser.( !!action %(opt data) )
+
 let name_in =
   let action Open s Close = s in
   Parser.( !!action %(open_ name_n) %data %(close name_n) )
@@ -358,25 +365,31 @@ let rec text_element_in input =
   let list_ Open items Close = List items in
   let enum Open items Close = Enum items in
   let newline Open Close = Newline in
-  let title Open txt Close = Title txt in
+  let title Open i l txt Close = Title (i, l, txt) in
   let reference Open rf txto Close = Ref(rf, txto) in
   let parser =
     Parser.(   !!raw %data
                @@ !!code %(open_ code_n) %string_in %(close code_n)
                @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
-               @@ !!italic %(open_ italic_n) %(list text_element_in) %(close italic_n)
+               @@ !!italic %(open_ italic_n) %(list text_element_in)
+                  %(close italic_n)
                @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
-               @@ !!center %(open_ center_n) %(list text_element_in) %(close center_n)
+               @@ !!center
+                  %(open_ center_n) %(list text_element_in) %(close center_n)
                @@ !!left %(open_ left_n) %(list text_element_in) %(close left_n)
-               @@ !!right %(open_ right_n) %(list text_element_in) %(close right_n)
+               @@ !!right
+                  %(open_ right_n) %(list text_element_in) %(close right_n)
                @@ !!super %(open_ superscript_n)
                   %(list text_element_in)
                   %(close superscript_n)
-               @@ !!sub %(open_ subscript_n) %(list text_element_in) %(close subscript_n)
+               @@ !!sub %(open_ subscript_n) %(list text_element_in)
+                  %(close subscript_n)
                @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
                @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
                @@ !!newline %(open_ newline_n) %(close newline_n)
-               @@ !!title %(open_ title_n) %(list text_element_in) %(close title_n)
+               @@ !!title %(open_ title_n)
+                  %int_in %(opt string_in) %(list text_element_in)
+                  %(close title_n)
                @@ !!reference %(open_ ref_n)
                   %reference_in
                   %(opt (list text_element_in))
@@ -646,6 +659,10 @@ let string_out output str =
   if String.length str = 0 then ()
   else data output str
 
+let int_out output i =
+  if i = 0 then ()
+  else data output (string_of_int i)
+
 let name_out output name =
   open_ output name_n;
   data output name;
@@ -756,8 +773,10 @@ let rec text_element_out output = function
   | Newline ->
       open_ output newline_n;
       close output newline_n
-  | Title txt ->
+  | Title (i, l, txt) ->
       open_ output title_n;
+      int_out output i;
+      opt string_out output l;
       list text_element_out output txt;
       close output title_n
   | Ref(rf, txto) ->
