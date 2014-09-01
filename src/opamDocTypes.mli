@@ -57,6 +57,7 @@ and signature = signature_item list
 and signature_item =
   | Val of val_
   | Types of type_ list
+  | Exn of exn_
   | Modules of nested_module list
   | ModuleType of nested_module_type
   | Comment of doc
@@ -133,6 +134,14 @@ and type_expr =
 and label =
   | Label of string
   | Default of string
+
+(** {3 Exceptions} *)
+
+and exn_ =
+  { name: string;
+    doc: doc;
+    args: type_expr list;
+    ret: type_expr option; }
 
 (** {3 Paths} *)
 

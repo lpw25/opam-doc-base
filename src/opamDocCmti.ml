@@ -97,6 +97,9 @@ and read_signature_item res path api item : (signature_item * api) option =
           ) decls
       in
       Some (Types decls, api)
+  | Tsig_exception e ->
+      let e = OpamDocCmi.read_extension_constructor res e.ext_id e.ext_type in
+      Some (Exn e, api)
   | Tsig_module md ->
       let md, api = read_module_declaration res path api md in
       Some (Modules [md], api)

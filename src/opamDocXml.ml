@@ -40,6 +40,7 @@ let arg_n: Xmlm.name = ("","arg")
 let return_n: Xmlm.name = ("","return")
 
 let val_n: Xmlm.name = ("","val")
+let exn_n: Xmlm.name = ("","exn")
 
 let var_n: Xmlm.name = ("","var")
 let arrow_n: Xmlm.name = ("","arrow")
@@ -487,7 +488,7 @@ let rec type_expr_in input =
   parser input
 
 let val_in =
-  let action (Open, _) name doc type_ Close =
+  let action (Open, _) name doc type_ Close: val_ =
     {name = Value.Name.of_string name; doc; type_}
   in
   let open Parser in
@@ -509,12 +510,20 @@ let arg_in =
   Parser.( !!action %(open_ arg_n) %type_expr_in %(close arg_n) )
 
 let constructor_in =
-  let action (Open, _) name doc args ret Close =
+  let action (Open, _) name doc args ret Close: constructor =
     {name = Constructor.Name.of_string name; doc; args; ret;}
   in
   let open Parser in
   !!action %(open_ constructor_n) %name_in %doc_in %(list arg_in) %(opt ret_in)
   %(close constructor_n)
+
+let exn_in =
+  let action (Open, _) name doc args ret Close: exn_ =
+    {name; doc; args; ret}
+  in
+  let open Parser in
+  !!action %(open_ exn_n) %string_in %doc_in %(list arg_in) %(opt ret_in)
+  %(close exn_n)
 
 let type_kind_in =
   let abstract = None in
@@ -578,6 +587,7 @@ let nested_module_in =
 let signature_item_in =
   let val_ v : signature_item = Val v in
   let type_ t = Types [t] in
+  let exn_ e = Exn e in
   let types (Open, _) ts Close = Types ts in
   let module_ md = Modules [md] in
   let modules (Open, _) mds Close = Modules mds in
@@ -588,6 +598,7 @@ let signature_item_in =
   !!val_ %val_in
   @@ !!type_ %type_decl_in
   @@ !!types %(open_ types_n) %(seq type_decl_in) %(close types_n)
+  @@ !!exn_ %exn_in
   @@ !!module_ %nested_module_in
   @@ !!modules %(open_ modules_n) %(seq nested_module_in) %(close modules_n)
   @@ !!module_type %nested_module_type_in
@@ -919,7 +930,7 @@ let rec type_expr_out output = function
       close output constr_n
   | TYPE_EXPR_todo msg -> todo_out output msg
 
-let val_out output {name; doc; type_} =
+let val_out output ({name; doc; type_}: val_) =
   open_ output val_n;
   name_out output (Value.Name.to_string name);
   doc_out output doc;
@@ -943,13 +954,21 @@ let arg_out output typ =
   type_expr_out output typ;
   close output arg_n
 
-let constructor_out output {name; doc; args; ret;} =
+let constructor_out output ({name; doc; args; ret;}: constructor) =
   open_ output constructor_n;
   name_out output (Constructor.Name.to_string name);
   doc_out output doc;
   list arg_out output args;
   opt ret_out output ret;
   close output constructor_n
+
+let exn_out output ({name; doc; args; ret}: exn_) =
+  open_ output exn_n;
+  string_out output name;
+  doc_out output doc;
+  list arg_out output args;
+  opt ret_out output ret;
+  close output exn_n
 
 let type_kind_out output = function
   | None -> ()
@@ -1022,6 +1041,7 @@ let signature_item_out output : signature_item -> unit = function
       open_ output types_n;
       list type_decl_out output ts;
       close output types_n
+  | Exn e -> exn_out output e
   | Modules [md] -> nested_module_out output md
   | Modules mds ->
       open_ output modules_n;

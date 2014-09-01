@@ -256,7 +256,7 @@ let read_type_scheme res (typ : Types.type_expr) : type_expr =
   mark_type typ;
   read_type_expr res typ
 
-let read_value_description res id (v : Types.value_description) =
+let read_value_description res id (v : Types.value_description): val_ =
   { name = Value.Name.of_string (Ident.name id);
     doc = read_attributes res v.val_attributes;
     type_ = read_type_scheme res v.val_type; }
@@ -266,11 +266,18 @@ let rec read_type_param res (typ : Types.type_expr) =
   | Var v -> v
   | _ -> "todo"
 
-let read_constructor_declaration res (cd : Types.constructor_declaration) =
+let read_constructor_declaration res (cd : Types.constructor_declaration)
+  : constructor =
   { name = Constructor.Name.of_string (Ident.name cd.cd_id);
     doc = read_attributes res cd.cd_attributes;
     args = List.map (read_type_expr res) cd.cd_args;
     ret = map_opt (read_type_expr res) cd.cd_res; }
+
+let read_extension_constructor res id (e: Types.extension_constructor): exn_ =
+  { name = Ident.name id;
+    doc = read_attributes res e.ext_attributes;
+    args = List.map (read_type_expr res) e.ext_args;
+    ret = map_opt (read_type_expr res) e.ext_ret_type; }
 
 let read_label_declaration res (ld : Types.label_declaration) : field =
   { name = Field.Name.of_string (Ident.name ld.ld_id);
@@ -411,6 +418,9 @@ and read_signature res path api (acc : signature) = function
   | Sig_type(id, decl, _) :: rest ->
       let decl = read_type_declaration res id decl in
       read_signature res path api ((Types [decl]) ::  acc) rest
+  | Sig_typext (id, v, Text_exception) :: rest ->
+      let decl = read_extension_constructor res id v in
+      read_signature res path api ((Exn decl) :: acc) rest
   | Sig_module(id, md, Trec_first) :: rest ->
       let md, api = read_module_declaration res path api id md in
       let rec loop api acc' = function

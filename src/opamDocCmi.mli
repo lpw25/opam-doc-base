@@ -32,6 +32,9 @@ val read_type_declaration: OpamDocPath.resolver -> Ident.t ->
 val read_value_description: OpamDocPath.resolver -> Ident.t ->
   Types.value_description -> OpamDocTypes.val_
 
+val read_extension_constructor: OpamDocPath.resolver -> Ident.t ->
+  Types.extension_constructor -> OpamDocTypes.exn_
+
 val read_attributes: OpamDocPath.resolver -> Parsetree.attributes ->
   OpamDocTypes.doc
 
