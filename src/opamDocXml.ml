@@ -74,6 +74,7 @@ let title_n: Xmlm.name = ("","title")
 let ref_n: Xmlm.name = ("","ref")
 let level_n: Xmlm.name = ("","level")
 let label_n: Xmlm.name = ("","label")
+let target_n: Xmlm.name = ("","target")
 
 (* XML parser combinators *)
 
@@ -383,36 +384,34 @@ let rec text_element_in input =
     Title (level, label, txt)
   in
   let reference (Open, _) rf txto Close = Ref(rf, txto) in
+  let target (Open, attrs) code Close =
+    let target =
+      try Some (List.assoc target_n attrs)
+      with Not_found -> None
+    in
+    Target (target, code)
+  in
   let parser =
-    Parser.(   !!raw %data
-               @@ !!code %(open_ code_n) %string_in %(close code_n)
-               @@ !!precode %(open_ precode_n) %string_in %(close precode_n)
-               @@ !!verbatim %(open_ verbatim_n) %string_in %(close verbatim_n)
-               @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
-               @@ !!italic %(open_ italic_n) %(list text_element_in)
-                  %(close italic_n)
-               @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
-               @@ !!center
-                  %(open_ center_n) %(list text_element_in) %(close center_n)
-               @@ !!left %(open_ left_n) %(list text_element_in) %(close left_n)
-               @@ !!right
-                  %(open_ right_n) %(list text_element_in) %(close right_n)
-               @@ !!super %(open_ superscript_n)
-                  %(list text_element_in)
-                  %(close superscript_n)
-               @@ !!sub %(open_ subscript_n) %(list text_element_in)
-                  %(close subscript_n)
-               @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
-               @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
-               @@ !!newline %(open_ newline_n) %(close newline_n)
-               @@ !!block %(open_ block_n) %(list text_element_in)
-                  %(close block_n)
-               @@ !!title %(open_ title_n) %(list text_element_in)
-                  %(close title_n)
-               @@ !!reference %(open_ ref_n)
-                  %reference_in
-                  %(opt (list text_element_in))
-                  %(close ref_n) )
+    let open Parser in
+    !!raw %data
+    @@ !!code %(open_ code_n) %string_in %(close code_n)
+    @@ !!precode %(open_ precode_n) %string_in %(close precode_n)
+    @@ !!verbatim %(open_ verbatim_n) %string_in %(close verbatim_n)
+    @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
+    @@ !!italic %(open_ italic_n) %(list text_element_in) %(close italic_n)
+    @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
+    @@ !!center %(open_ center_n) %(list text_element_in) %(close center_n)
+    @@ !!left %(open_ left_n) %(list text_element_in) %(close left_n)
+    @@ !!right %(open_ right_n) %(list text_element_in) %(close right_n)
+    @@ !!super %(open_ superscript_n) %(list text_element_in) %(close superscript_n)
+    @@ !!sub %(open_ subscript_n) %(list text_element_in) %(close subscript_n)
+    @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
+    @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
+    @@ !!newline %(open_ newline_n) %(close newline_n)
+    @@ !!block %(open_ block_n) %(list text_element_in) %(close block_n)
+    @@ !!title %(open_ title_n) %(list text_element_in) %(close title_n)
+    @@ !!reference %(open_ ref_n) %reference_in %(opt (list text_element_in)) %(close ref_n)
+    @@ !!target %(open_ target_n) %string_in %(close target_n)
   in
   parser input
 
@@ -817,6 +816,14 @@ let rec text_element_out output = function
       reference_out output rf;
       opt (list text_element_out) output txto;
       close output ref_n
+  | Target (target, code) ->
+      let attrs = match target with
+        | None   -> []
+        | Some t -> [target_n, t]
+      in
+      open_ output ~attrs target_n;
+      string_out output code;
+      close output target_n
 
 and item_out output txt =
   open_ output item_n;

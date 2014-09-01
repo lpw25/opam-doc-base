@@ -90,7 +90,8 @@ and read_text_element res : Documentation.text_element -> text = function
     end
   | Ref(_, _, Some txt) -> read_text res txt
   | Ref(_, s, None) -> [Raw s]
-  | _ -> raise Not_implemented
+  | Special_ref _ -> raise Not_implemented
+  | Target (target, code) -> [Target (target, code)]
 
 and read_text res txt =
   List.concat (List.map (read_text_element res) txt)

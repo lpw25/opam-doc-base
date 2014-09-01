@@ -162,6 +162,7 @@ and text_element =
   | Block of text
   | Title of int * string option * text
   | Ref of reference * text option
+  | Target of string option * string
 
 and style =
   | Bold
