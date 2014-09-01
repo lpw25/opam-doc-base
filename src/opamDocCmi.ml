@@ -45,10 +45,13 @@ let rec read_style : Documentation.style_kind -> style = function
 and read_text_element res : Documentation.text_element -> text = function
   | Raw s -> [Raw s]
   | Code s -> [Code s]
+  | PreCode s -> [PreCode s]
+  | Verbatim s -> [Verbatim s]
   | Style(sk, txt) -> [Style(read_style sk, read_text res txt)]
   | List l -> [List(List.map (read_text res) l)]
   | Enum l -> [Enum(List.map (read_text res) l)]
   | Newline -> [Newline]
+  | Block txt -> [Block (read_text res txt)]
   | Title(i, l, txt) -> [Title (i, l, read_text res txt)]
   | Ref(RK_module, s, txt) -> begin
       match lookup_module res s, txt with
