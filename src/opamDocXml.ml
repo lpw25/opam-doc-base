@@ -78,6 +78,21 @@ let level_n: Xmlm.name = ("","level")
 let label_n: Xmlm.name = ("","label")
 let target_n: Xmlm.name = ("","target")
 let link_n: Xmlm.name = ("","link")
+
+let author_n: Xmlm.name = ("","author")
+let version_n: Xmlm.name = ("","version")
+let see_n: Xmlm.name = ("","see")
+let since_n: Xmlm.name = ("","since")
+let before_n: Xmlm.name = ("","before")
+let deprecated_n: Xmlm.name = ("","deprecated")
+let param_n: Xmlm.name = ("","param")
+let raised_n: Xmlm.name = ("","raised")
+let return_n: Xmlm.name = ("","return")
+
+let url_n: Xmlm.name = ("","url")
+let file_n: Xmlm.name = ("","file")
+let doc_n: Xmlm.name = ("","doc")
+
 let todo_n: Xmlm.name = ("","todo")
 
 (* XML parser combinators *)
@@ -350,6 +365,15 @@ let value_t_in =
   let open Parser in
   !!action %(open_ val_n) %module_t_in %name_in %(close val_n)
 
+let see_ref_in =
+  let url (Open, _) s Close = Documentation.See_url s in
+  let file (Open, _) s Close = Documentation.See_file s in
+  let doc (Open, _) s Close = Documentation.See_doc s in
+  let open Parser in
+  !!url %(open_ url_n) %string_in %(close url_n)
+  @@ !!file %(open_ file_n) %string_in %(close file_n)
+  @@ !!doc %(open_ doc_n) %string_in %(close doc_n)
+
 let reference_in =
   let module_ (Open, _) path Close = Module path in
   let module_type (Open, _) path Close = ModuleType path in
@@ -403,40 +427,67 @@ let rec text_element_in input =
     @@ !!code %(open_ code_n) %string_in %(close code_n)
     @@ !!precode %(open_ precode_n) %string_in %(close precode_n)
     @@ !!verbatim %(open_ verbatim_n) %string_in %(close verbatim_n)
-    @@ !!bold %(open_ bold_n) %(list text_element_in) %(close bold_n)
-    @@ !!italic %(open_ italic_n) %(list text_element_in) %(close italic_n)
-    @@ !!emph %(open_ emph_n) %(list text_element_in) %(close emph_n)
-    @@ !!center %(open_ center_n) %(list text_element_in) %(close center_n)
-    @@ !!left %(open_ left_n) %(list text_element_in) %(close left_n)
-    @@ !!right %(open_ right_n) %(list text_element_in) %(close right_n)
-    @@ !!super %(open_ superscript_n) %(list text_element_in) %(close superscript_n)
-    @@ !!sub %(open_ subscript_n) %(list text_element_in) %(close subscript_n)
-    @@ !!custom %(open_ custom_n) %(list text_element_in) %(close custom_n)
+    @@ !!bold %(open_ bold_n) %text_in %(close bold_n)
+    @@ !!italic %(open_ italic_n) %text_in %(close italic_n)
+    @@ !!emph %(open_ emph_n) %text_in %(close emph_n)
+    @@ !!center %(open_ center_n) %text_in %(close center_n)
+    @@ !!left %(open_ left_n) %text_in %(close left_n)
+    @@ !!right %(open_ right_n) %text_in %(close right_n)
+    @@ !!super %(open_ superscript_n) %text_in %(close superscript_n)
+    @@ !!sub %(open_ subscript_n) %text_in %(close subscript_n)
+    @@ !!custom %(open_ custom_n) %text_in %(close custom_n)
     @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
     @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
     @@ !!newline %(open_ newline_n) %(close newline_n)
-    @@ !!block %(open_ block_n) %(list text_element_in) %(close block_n)
-    @@ !!title %(open_ title_n) %(list text_element_in) %(close title_n)
-    @@ !!reference %(open_ ref_n) %reference_in %(opt (list text_element_in)) %(close ref_n)
+    @@ !!block %(open_ block_n) %text_in %(close block_n)
+    @@ !!title %(open_ title_n) %text_in %(close title_n)
+    @@ !!reference %(open_ ref_n) %reference_in %(opt text_in) %(close ref_n)
     @@ !!target %(open_ target_n) %string_in %(close target_n)
     @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
   in
   parser input
 
+and text_in input = Parser.list text_element_in input
+
 and item_in input =
   let action (Open, _) txt Close = txt in
   let parser =
     let open Parser in
-    !!action %(open_ item_n) %(list text_element_in) %(close item_n)
+    !!action %(open_ item_n) %text_in %(close item_n)
   in
   parser input
 
+let tag_in =
+  let author (Open, _) a Close = Author a in
+  let version (Open, _) v Close = Version v in
+  let see (Open, _) r t Close = See (r, t) in
+  let since (Open, _) s Close = Since s in
+  let before (Open, _) s t Close = Before (s, t) in
+  let deprecated (Open, _) t Close = Deprecated t in
+  let param (Open, _) s t Close = Param (s, t) in
+  let raised (Open, _) s t Close = Raised_exception (s, t) in
+  let return_value (Open, _) t Close = Return_value t in
+  let custom (Open, _) s t Close = Custom (s, t) in
+  let open Parser in
+  !!author %(open_ author_n) %string_in %(close author_n)
+  @@ !!version %(open_ version_n) %string_in %(close version_n)
+  @@ !!see %(open_ see_n) %see_ref_in %text_in %(close see_n)
+  @@ !!since %(open_ since_n) %string_in %(close since_n)
+  @@ !!before %(open_ before_n) %string_in %text_in %(close since_n)
+  @@ !!deprecated %(open_ deprecated_n) %text_in %(close since_n)
+  @@ !!param %(open_ param_n) %string_in %text_in %(close param_n)
+  @@ !!raised %(open_ raised_n) %string_in %text_in %(close raised_n)
+  @@ !!return_value %(open_ return_n) %text_in %(close return_n)
+  @@ !!custom %(open_ custom_n) %string_in %text_in %(close custom_n)
+
+let tags_in = Parser.list tag_in
+
 let doc_in =
-  let none = {info = []} in
-  let doc (Open, _) info Close = {info} in
+  let none = { info = []; tags = []; } in
+  let doc (Open, attrs) info tags Close = {info; tags} in
   let open Parser in
   !!none
-  @@ !!doc %(open_ doc_n) %(list text_element_in) %(close doc_n)
+  @@ !!doc %(open_ doc_n) %text_in %tags_in %(close doc_n)
 
 let type_path_in =
   let known (Open, _) path Close = Known path in
@@ -592,7 +643,7 @@ let signature_item_in =
   let module_ md = Modules [md] in
   let modules (Open, _) mds Close = Modules mds in
   let module_type mtd : signature_item = ModuleType mtd in
-  let comment (Open, _) info Close = Comment {info} in
+  let comment (Open, _) info tags Close = Comment {info; tags} in
   let todo (Open, _) msg Close = SIG_todo msg in
   let open Parser in
   !!val_ %val_in
@@ -602,7 +653,7 @@ let signature_item_in =
   @@ !!module_ %nested_module_in
   @@ !!modules %(open_ modules_n) %(seq nested_module_in) %(close modules_n)
   @@ !!module_type %nested_module_type_in
-  @@ !!comment %(open_ comment_n) %(list text_element_in) %(close comment_n)
+  @@ !!comment %(open_ comment_n) %text_in %tags_in %(close comment_n)
   @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
 
 let module_type_expr_in =
@@ -785,39 +836,39 @@ let rec text_element_out output = function
       close output verbatim_n
   | Style(Bold, txt) ->
       open_ output bold_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output bold_n
   | Style(Italic, txt) ->
       open_ output italic_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output italic_n
   | Style(Emphasize, txt) ->
       open_ output emph_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output emph_n
   | Style(Center, txt) ->
       open_ output center_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output center_n
   | Style(Left, txt) ->
       open_ output left_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output left_n
   | Style(Right, txt) ->
       open_ output right_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output right_n
   | Style(Superscript, txt) ->
       open_ output superscript_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output superscript_n
   | Style(Subscript, txt) ->
       open_ output subscript_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output subscript_n
   | Style (Custom c, txt) ->
       open_ output ~attrs:[custom_n, c] custom_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output custom_n
   | List items ->
       open_ output list_n;
@@ -832,7 +883,7 @@ let rec text_element_out output = function
       close output newline_n
   | Block txt ->
       open_ output block_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output block_n
   | Title (level, label, txt) ->
       let attrs =
@@ -840,12 +891,12 @@ let rec text_element_out output = function
         :: match label with None -> [] | Some l -> [label_n, l]
       in
       open_ ~attrs output title_n;
-      list text_element_out output txt;
+      text_out output txt;
       close output title_n
   | Ref(rf, txto) ->
       open_ output ref_n;
       reference_out output rf;
-      opt (list text_element_out) output txto;
+      opt text_out output txto;
       close output ref_n
   | Target (target, code) ->
       let attrs = match target with
@@ -857,17 +908,81 @@ let rec text_element_out output = function
       close output target_n
   | TEXT_todo msg -> todo_out output msg
 
+and text_out output = list text_element_out output
+
 and item_out output txt =
   open_ output item_n;
-  list text_element_out output txt;
+  text_out output txt;
   close output item_n
 
-let doc_out output {info} =
-  match info with
-  | [] -> ()
-  | l ->
+let see_ref_out output x =
+  let open Documentation in
+  let out n s =
+    open_ output n;
+    string_out output s;
+    close output n
+  in
+  match x with
+  | See_url s -> out url_n s
+  | See_file s -> out file_n s
+  | See_doc s -> out doc_n s
+
+let tag_out output = function
+  | Author s ->
+      open_ output author_n;
+      string_out output s;
+      close output author_n
+  | Version v ->
+      open_ output version_n;
+      string_out output v;
+      close output version_n
+  | See (r, t) ->
+      open_ output see_n;
+      see_ref_out output r;
+      text_out output t;
+      close output see_n
+  | Since s ->
+      open_ output since_n;
+      string_out output s;
+      close output since_n
+  | Before (s, t) ->
+      open_ output before_n;
+      string_out output s;
+      text_out output t;
+      close output before_n
+  | Deprecated t ->
+      open_ output deprecated_n;
+      text_out output t;
+      close output deprecated_n
+  | Param (s, t) ->
+      open_ output param_n;
+      string_out output s;
+      text_out output t;
+      close output param_n
+  | Raised_exception (s, t) ->
+      open_ output raised_n;
+      string_out output s;
+      text_out output t;
+      close output raised_n
+  | Return_value t ->
+      open_ output return_n;
+      text_out output t;
+      close output return_n
+  | Custom (s, t) ->
+      open_ output custom_n;
+      string_out output s;
+      text_out output t;
+      close output custom_n
+
+let tags_out output = list tag_out output
+
+let doc_out output {info; tags} =
+  match info, tags with
+  | [], [] -> ()
+  | _ ->
       open_ output doc_n;
-      list text_element_out output info;
+      text_out output info;
+      tags_out output tags;
       close output doc_n
 
 let type_path_out output = function
@@ -1048,9 +1163,10 @@ let signature_item_out output : signature_item -> unit = function
       list nested_module_out output mds;
       close output modules_n
   | ModuleType mtd -> nested_module_type_out output mtd
-  | Comment {info} ->
+  | Comment {info; tags} ->
       open_ output comment_n;
-      list text_element_out output info;
+      text_out output info;
+      tags_out output tags;
       close output comment_n
   | SIG_todo msg -> todo_out output msg
 

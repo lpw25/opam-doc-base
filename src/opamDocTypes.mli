@@ -160,7 +160,8 @@ and type_path =
 (** {3 Documentation} *)
 
 and doc =
-  { info: text; }
+  { info: text;
+    tags: tag list; }
 
 and text = text_element list
 
@@ -196,6 +197,18 @@ and reference =
   | Type of Type.t
   | Val of Value.t
   | Link of string
+
+and tag =
+  | Author of string
+  | Version of string
+  | See of Documentation.see_ref * text
+  | Since of string
+  | Before of string * text
+  | Deprecated of text
+  | Param of string * text
+  | Raised_exception of string * text
+  | Return_value of text
+  | Custom of string * text
 
 type api =
   { modules: module_ OpamDocPath.Module.Map.t;

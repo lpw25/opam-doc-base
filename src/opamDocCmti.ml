@@ -23,8 +23,8 @@ open OpamDocTypes
 
 let read_comment res : Parsetree.attribute -> doc option = function
   | ({txt = "comment"}, PDoc(d, _)) ->
-      let info = OpamDocCmi.read_documentation res d in
-      Some {info}
+      let info, tags = OpamDocCmi.read_documentation res d in
+      Some {info; tags}
   | _ -> None
 
 let rec read_module_declaration res path api md =
@@ -142,7 +142,7 @@ let read_interface_tree res path intf =
   let doc, (sg : module_type_expr) =
     match sg with
     | Signature (Comment doc :: items) -> doc, Signature items
-    | Signature items -> {info = []}, Signature items
+    | Signature items -> {info = []; tags = []}, Signature items
   in
   let modl =
     { path = path; doc; alias = None;

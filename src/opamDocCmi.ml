@@ -104,25 +104,39 @@ and read_text_element res : Documentation.text_element -> text = function
 and read_text res txt =
   List.concat (List.map (read_text_element res) txt)
 
-let read_documentation res : Documentation.t -> text = function
-  | Cinfo(txt, _) -> read_text res txt
+let read_tag res: Documentation.tag -> tag = function
+  | Author s -> Author s
+  | Version v -> Version v
+  | See (r, t) -> See (r, read_text res t)
+  | Since s -> Since s
+  | Before (s, t) -> Before (s, read_text res t)
+  | Deprecated t -> Deprecated (read_text res t)
+  | Param (s, t) -> Param (s, read_text res t)
+  | Raised_exception (s, t) -> Raised_exception (s, read_text res t)
+  | Return_value t -> Return_value (read_text res t)
+  | Custom (s, t) -> Custom (s, read_text res t)
+
+
+let read_documentation res : Documentation.t -> text * tag list = function
+  | Cinfo(txt, tags) -> read_text res txt, List.map (read_tag res) tags
   | Cstop -> assert false
 
 let rec read_attributes res : Parsetree.attributes -> doc = function
   | ({txt = "doc"}, PDoc(d, _)) :: rest ->
       let rec loop = function
         | ({txt = "doc"}, PDoc(d, _)) :: rest ->
-            let d = read_documentation res d in
-            let rest = loop rest in
-            Newline :: d @ rest
+            let d, t = read_documentation res d in
+            let rest, tags = loop rest in
+            (Newline :: d @ rest), t @ tags
         | _ :: rest -> loop rest
-        | [] -> []
+        | [] -> [], []
       in
-      let d = read_documentation res d in
-      let rest = loop rest in
-      { info = d @ rest }
+      let d, t = read_documentation res d in
+      let rest, tags = loop rest in
+      { info = d @ rest;
+        tags = t @ tags; }
   | _ :: rest -> read_attributes res rest
-  | [] -> { info = [] }
+  | [] -> { info = []; tags = []; }
 
 let read_label lbl =
   let len = String.length lbl in
@@ -448,7 +462,7 @@ let read_interface res path intf =
   in
   let sg, api = read_signature res path api [] intf in
   let modl =
-    { path = path; doc = {info = []}; alias = None;
+    { path = path; doc = {info = []; tags = []; }; alias = None;
       type_path = None; type_ = Some sg }
   in
   { api with modules = Module.Map.add path modl api.modules }

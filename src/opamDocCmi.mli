@@ -39,4 +39,4 @@ val read_attributes: OpamDocPath.resolver -> Parsetree.attributes ->
   OpamDocTypes.doc
 
 val read_documentation: OpamDocPath.resolver -> Documentation.t ->
-  OpamDocTypes.text
+  OpamDocTypes.text * OpamDocTypes.tag list
