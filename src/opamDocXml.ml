@@ -348,12 +348,11 @@ let reference_in =
   let module_type (Open, _) path Close = ModuleType path in
   let type_ (Open, _) path Close = Type path in
   let val_ (Open, _) path Close = Val path in
-  Parser.(    !!module_ %(open_ module_n) %module_t_in %(close module_n)
-              @@ !!module_type %(open_ module_type_n)
-                 %module_type_t_in
-                 %(close module_type_n)
-              @@ !!type_ %(open_ type_n) %type_t_in %(close type_n)
-              @@ !!val_ %(open_ val_n) %value_t_in %(close val_n) )
+  let open Parser in
+  !!module_ %(open_ module_n) %module_t_in %(close module_n)
+  @@ !!module_type %(open_ module_type_n) %module_type_t_in %(close module_type_n)
+  @@ !!type_ %(open_ type_n) %type_t_in %(close type_n)
+  @@ !!val_ %(open_ val_n) %value_t_in %(close val_n)
 
 let rec text_element_in input =
   let raw s = Raw s in
