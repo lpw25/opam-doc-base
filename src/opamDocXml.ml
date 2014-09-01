@@ -65,6 +65,7 @@ let left_n: Xmlm.name = ("","left")
 let right_n: Xmlm.name = ("","right")
 let superscript_n: Xmlm.name = ("","superscript")
 let subscript_n: Xmlm.name = ("","subscript")
+let custom_n: Xmlm.name = ("","custom")
 let list_n: Xmlm.name = ("","list")
 let enum_n: Xmlm.name = ("","enum")
 let newline_n: Xmlm.name = ("","newline")
@@ -76,6 +77,7 @@ let level_n: Xmlm.name = ("","level")
 let label_n: Xmlm.name = ("","label")
 let target_n: Xmlm.name = ("","target")
 let link_n: Xmlm.name = ("","link")
+let not_implemented_n: Xmlm.name = ("","not-implemented")
 
 (* XML parser combinators *)
 
@@ -371,6 +373,9 @@ let rec text_element_in input =
   let right (Open, _) txt Close = Style(Right, txt) in
   let super (Open, _) txt Close = Style(Superscript, txt) in
   let sub (Open, _) txt Close = Style(Subscript, txt) in
+  let custom (Open, attrs) txt Close =
+    let c = try List.assoc custom_n attrs with Not_found -> "?" in
+    Style(Custom c, txt) in
   let list_ (Open, _) items Close = List items in
   let enum (Open, _) items Close = Enum items in
   let newline (Open, _) Close = Newline in
@@ -380,20 +385,15 @@ let rec text_element_in input =
       try int_of_string (List.assoc level_n attrs)
       with Not_found | Failure _ -> 0
     in
-    let label =
-      try Some (List.assoc label_n attrs)
-      with Not_found -> None
-    in
+    let label = try Some (List.assoc label_n attrs) with Not_found -> None in
     Title (level, label, txt)
   in
   let reference (Open, _) rf txto Close = Ref(rf, txto) in
   let target (Open, attrs) code Close =
-    let target =
-      try Some (List.assoc target_n attrs)
-      with Not_found -> None
-    in
+    let target = try Some (List.assoc target_n attrs) with Not_found -> None in
     Target (target, code)
   in
+  let not_implemented (Open, _) msg Close = Not_implemented msg in
   let parser =
     let open Parser in
     !!raw %data
@@ -408,6 +408,7 @@ let rec text_element_in input =
     @@ !!right %(open_ right_n) %(list text_element_in) %(close right_n)
     @@ !!super %(open_ superscript_n) %(list text_element_in) %(close superscript_n)
     @@ !!sub %(open_ subscript_n) %(list text_element_in) %(close subscript_n)
+    @@ !!custom %(open_ custom_n) %(list text_element_in) %(close custom_n)
     @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
     @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
     @@ !!newline %(open_ newline_n) %(close newline_n)
@@ -415,6 +416,7 @@ let rec text_element_in input =
     @@ !!title %(open_ title_n) %(list text_element_in) %(close title_n)
     @@ !!reference %(open_ ref_n) %reference_in %(opt (list text_element_in)) %(close ref_n)
     @@ !!target %(open_ target_n) %string_in %(close target_n)
+    @@ !!not_implemented %(open_ not_implemented_n) %string_in %(close not_implemented_n)
   in
   parser input
 
@@ -797,6 +799,10 @@ let rec text_element_out output = function
       open_ output subscript_n;
       list text_element_out output txt;
       close output subscript_n
+  | Style (Custom c, txt) ->
+      open_ output ~attrs:[custom_n, c] custom_n;
+      list text_element_out output txt;
+      close output custom_n
   | List items ->
       open_ output list_n;
       list item_out output items;
@@ -833,6 +839,10 @@ let rec text_element_out output = function
       open_ output ~attrs target_n;
       string_out output code;
       close output target_n
+  | Not_implemented msg ->
+      open_ output not_implemented_n;
+      string_out output msg;
+      close output not_implemented_n
 
 and item_out output txt =
   open_ output item_n;

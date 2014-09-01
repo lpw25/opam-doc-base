@@ -40,7 +40,7 @@ let rec read_style : Documentation.style_kind -> style = function
   | SK_right -> Right
   | SK_superscript -> Superscript
   | SK_subscript -> Subscript
-  | SK_custom s -> raise Not_implemented
+  | SK_custom s -> Custom s
 
 and read_text_element res : Documentation.text_element -> text = function
   | Raw s -> [Raw s]
@@ -99,20 +99,15 @@ and read_text_element res : Documentation.text_element -> text = function
       | None   -> [Ref (Link uri, None)]
       | Some t -> [Ref (Link uri, Some (read_text res t))]
     end
-  | Ref(_, _, Some txt) -> read_text res txt
-  | Ref(_, s, None) -> [Raw s]
-  | Special_ref _ -> raise Not_implemented
+  | Ref(_, s, _)  -> [Not_implemented ("ref:"^s)]
+  | Special_ref _ -> [Not_implemented "special-ref"]
   | Target (target, code) -> [Target (target, code)]
 
 and read_text res txt =
   List.concat (List.map (read_text_element res) txt)
 
 let read_documentation res : Documentation.t -> text = function
-  | Cinfo(txt, _) -> begin
-      try
-        read_text res txt
-      with Not_implemented -> []
-    end
+  | Cinfo(txt, _) -> read_text res txt
   | Cstop -> assert false
 
 let rec read_attributes res : Parsetree.attributes -> doc = function

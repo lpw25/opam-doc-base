@@ -163,6 +163,7 @@ and text_element =
   | Title of int * string option * text
   | Ref of reference * text option
   | Target of string option * string
+  | Not_implemented of string
 
 and style =
   | Bold
@@ -173,6 +174,7 @@ and style =
   | Right
   | Superscript
   | Subscript
+  | Custom of string
 
 and reference =
   | Module of Module.t
