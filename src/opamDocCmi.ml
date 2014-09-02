@@ -21,8 +21,6 @@ open Parsetree
 open Types
 open OpamDocTypes
 
-exception Not_implemented
-
 let map_opt f = function
   | None -> None
   | Some x -> Some (f x)
@@ -40,16 +38,27 @@ let rec read_style : Documentation.style_kind -> style = function
   | SK_right -> Right
   | SK_superscript -> Superscript
   | SK_subscript -> Subscript
-  | SK_custom _ -> raise Not_implemented
+  | SK_custom s -> Custom s
 
 and read_text_element res : Documentation.text_element -> text = function
   | Raw s -> [Raw s]
   | Code s -> [Code s]
+  | PreCode s -> [PreCode s]
+  | Verbatim s -> [Verbatim s]
+  | Style(SK_custom s as sty, []) ->
+      if String.length s > 1 && s.[0] = '_' then
+        let s = String.sub s 1 (String.length s - 1) in
+        read_text_element res Documentation.(Style (SK_subscript, [Raw s]))
+      else
+        [Style(read_style sty, [])]
   | Style(sk, txt) -> [Style(read_style sk, read_text res txt)]
   | List l -> [List(List.map (read_text res) l)]
   | Enum l -> [Enum(List.map (read_text res) l)]
   | Newline -> [Newline]
-  | Title(_, _, txt) -> [Title (read_text res txt)]
+  | Block txt ->
+      (* There is actually no way to build a block element with ocamldoc. *)
+      assert false
+  | Title(i, l, txt) -> [Title (i, l, read_text res txt)]
   | Ref(RK_module, s, txt) -> begin
       match lookup_module res s, txt with
       | None, None -> [Raw s]
@@ -85,43 +94,57 @@ and read_text_element res : Documentation.text_element -> text = function
       | Some p, None -> [Ref(Val p, None)]
       | Some p, Some txt -> [Ref(Val p, Some (read_text res txt))]
     end
-  | Ref(_, _, Some txt) -> read_text res txt
-  | Ref(_, s, None) -> [Raw s]
-  | _ -> raise Not_implemented
+  | Ref(RK_link, uri, txt) -> begin
+      match txt with
+      | None   -> [Ref (Link uri, None)]
+      | Some t -> [Ref (Link uri, Some (read_text res t))]
+    end
+  | Ref(_, s, _)  -> [TEXT_todo ("ref:"^s)]
+  | Special_ref _ -> [TEXT_todo "special-ref"]
+  | Target (target, code) -> [Target (target, code)]
 
 and read_text res txt =
   List.concat (List.map (read_text_element res) txt)
 
-let read_documentation res : Documentation.t -> text = function
-  | Cinfo(txt, _) -> begin
-      try
-        read_text res txt
-      with Not_implemented -> []
-    end
+let read_tag res: Documentation.tag -> tag = function
+  | Author s -> Author s
+  | Version v -> Version v
+  | See (r, t) -> See (r, read_text res t)
+  | Since s -> Since s
+  | Before (s, t) -> Before (s, read_text res t)
+  | Deprecated t -> Deprecated (read_text res t)
+  | Param (s, t) -> Param (s, read_text res t)
+  | Raised_exception (s, t) -> Raise (s, read_text res t)
+  | Return_value t -> Return (read_text res t)
+  | Custom (s, t) -> Tag (s, read_text res t)
+
+let read_documentation res : Documentation.t -> text * tag list = function
+  | Cinfo(txt, tags) -> read_text res txt, List.map (read_tag res) tags
   | Cstop -> assert false
 
 let rec read_attributes res : Parsetree.attributes -> doc = function
   | ({txt = "doc"}, PDoc(d, _)) :: rest ->
       let rec loop = function
         | ({txt = "doc"}, PDoc(d, _)) :: rest ->
-            let d = read_documentation res d in
-            let rest = loop rest in
-              Newline :: d @ rest
+            let d, t = read_documentation res d in
+            let rest, tags = loop rest in
+            (Newline :: d @ rest), t @ tags
         | _ :: rest -> loop rest
-        | [] -> []
+        | [] -> [], []
       in
-      let d = read_documentation res d in
-      let rest = loop rest in
-        { info = d @ rest }
+      let d, t = read_documentation res d in
+      let rest, tags = loop rest in
+      { info = d @ rest;
+        tags = t @ tags; }
   | _ :: rest -> read_attributes res rest
-  | [] -> { info = [] }
+  | [] -> { info = []; tags = []; }
 
 let read_label lbl =
   let len = String.length lbl in
-    if len = 0 then None
-    else if lbl.[0] = '?' then
-      Some (Default (String.sub lbl 1 (len - 1)))
-    else Some (Label lbl)
+  if len = 0 then None
+  else if lbl.[0] = '?' then
+    Some (Default (String.sub lbl 1 (len - 1)))
+  else Some (Label lbl)
 
 (* Handle type variable names *)
 
@@ -142,7 +165,7 @@ let rec new_name () =
     if !name_counter < 26
     then String.make 1 (Char.chr(97 + !name_counter))
     else String.make 1 (Char.chr(97 + !name_counter mod 26)) ^
-           string_of_int(!name_counter / 26) in
+         string_of_int(!name_counter / 26) in
   incr name_counter;
   if List.mem name !used_names
   || List.exists (fun (_, name') -> name = name') !names
@@ -198,7 +221,7 @@ let mark_type ty =
       | Tsubst ty -> loop visited ty
       | _ -> ()
   in
-    loop [] ty
+  loop [] ty
 
 let mark_type_kind = function
   | Type_abstract -> ()
@@ -224,7 +247,20 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
       match typ.desc with
       | Tvar _ -> Var (name_of_type typ)
       | Tarrow(lbl, arg, ret, _) ->
-          Arrow(read_label lbl, read_type_expr res arg, read_type_expr res ret)
+          let label = read_label lbl in
+          let typ = match label with
+            | None
+            | Some (Label _)   -> read_type_expr res arg
+            | Some (Default _) ->
+                let is_option t =
+                  Type.Name.to_string (Type.name t) = "option"
+                in
+                match read_type_expr res arg with
+                | Constr(Known t, [x]) when is_option t -> x
+                | Constr(Unknown "option", [x]) -> x
+                | _ -> assert false (* Optional labels are *always* optional *)
+          in
+          Arrow(label, typ, read_type_expr res ret)
       | Ttuple typs -> Tuple (List.map (read_type_expr res) typs)
       | Tconstr(p, typs, _) ->
           let p =
@@ -233,13 +269,13 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
             | Some p -> Known p
           in
           let typs = List.map (read_type_expr res) typs in
-            Constr(p, typs)
+          Constr(p, typs)
       | Tsubst typ -> read_type_expr res typ
-      | _ -> raise Not_implemented
+      | _ -> TYPE_EXPR_todo (name_of_type typ)
     in
-      match alias with
-      | Some name -> Alias(typ, name)
-      | None -> typ
+    match alias with
+    | Some name -> Alias(typ, name)
+    | None -> typ
   end
 
 let read_type_scheme res (typ : Types.type_expr) : type_expr =
@@ -248,7 +284,7 @@ let read_type_scheme res (typ : Types.type_expr) : type_expr =
   mark_type typ;
   read_type_expr res typ
 
-let read_value_description res id (v : Types.value_description) =
+let read_value_description res id (v : Types.value_description): val_ =
   { name = Value.Name.of_string (Ident.name id);
     doc = read_attributes res v.val_attributes;
     type_ = read_type_scheme res v.val_type; }
@@ -256,13 +292,26 @@ let read_value_description res id (v : Types.value_description) =
 let rec read_type_param res (typ : Types.type_expr) =
   match read_type_expr res typ with
   | Var v -> v
-  | _ -> raise Not_implemented
+  | _ -> "todo"
 
-let read_constructor_declaration res (cd : Types.constructor_declaration) =
+let read_constructor_declaration res (cd : Types.constructor_declaration)
+  : constructor =
   { name = Constructor.Name.of_string (Ident.name cd.cd_id);
     doc = read_attributes res cd.cd_attributes;
     args = List.map (read_type_expr res) cd.cd_args;
     ret = map_opt (read_type_expr res) cd.cd_res; }
+
+let opt_iter f = function None -> () | Some x -> f x
+
+let read_extension_constructor res id (e: Types.extension_constructor): exn_ =
+  reset_names ();
+  reset_aliased ();
+  List.iter mark_type e.ext_args;
+  opt_iter mark_type e.ext_ret_type;
+  { name = Exn.Name.of_string (Ident.name id);
+    doc = read_attributes res e.ext_attributes;
+    args = List.map (read_type_expr res) e.ext_args;
+    ret = map_opt (read_type_expr res) e.ext_ret_type; }
 
 let read_label_declaration res (ld : Types.label_declaration) : field =
   { name = Field.Name.of_string (Ident.name ld.ld_id);
@@ -275,7 +324,7 @@ let read_type_kind res : Types.type_kind -> type_decl option = function
       Some (Variant (List.map (read_constructor_declaration res) cds))
   | Type_record(lds, _) ->
       Some (Record (List.map (read_label_declaration res) lds))
-  | Type_open -> raise Not_implemented
+  | Type_open ->  Some (TYPE_todo "type_open")
 
 let read_type_declaration res id (decl : Types.type_declaration) =
   reset_names ();
@@ -309,7 +358,7 @@ let rec read_module_declaration res path api id (md : Types.module_declaration) 
         let api =
           { api with modules = Module.Map.add path modl api.modules }
         in
-          Type (Path p), api
+        Type (Path p), api
     | Mty_signature sg ->
         let sg, api = read_signature res path api [] sg in
         let modl : module_ =
@@ -319,8 +368,8 @@ let rec read_module_declaration res path api id (md : Types.module_declaration) 
         let api =
           { api with modules = Module.Map.add path modl api.modules }
         in
-          Type Signature, api
-    | Mty_functor _ -> raise Not_implemented
+        Type Signature, api
+    | Mty_functor _ -> MODULE_todo ("functor:"^Module.to_string path), api
     | Mty_alias p ->
         let p : module_path =
           match find_module res p with
@@ -334,10 +383,10 @@ let rec read_module_declaration res path api id (md : Types.module_declaration) 
         let api =
           { api with modules = Module.Map.add path modl api.modules }
         in
-          Alias p, api
+        Alias p, api
   in
   let md : nested_module = { name; doc; desc } in
-    md, api
+  md, api
 
 and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) =
   let name = ModuleType.Name.of_string (Ident.name id) in
@@ -351,9 +400,9 @@ and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) 
         in
         let api =
           { api with
-              module_types = ModuleType.Map.add path mty api.module_types }
+            module_types = ModuleType.Map.add path mty api.module_types }
         in
-          Abstract, api
+        Abstract, api
     | Some (Mty_ident p) ->
         let p : module_type_path =
           match find_module_type res p with
@@ -365,9 +414,9 @@ and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) 
         in
         let api =
           { api with
-              module_types = ModuleType.Map.add path mty api.module_types }
+            module_types = ModuleType.Map.add path mty api.module_types }
         in
-          Manifest (Path p), api
+        Manifest (Path p), api
     | Some (Mty_signature sg) ->
         (* TODO use correct path when paths can include parent module types *)
         let sg, api = read_signature res path' api [] sg in
@@ -376,67 +425,54 @@ and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) 
         in
         let api =
           { api with
-              module_types = ModuleType.Map.add path mty api.module_types }
+            module_types = ModuleType.Map.add path mty api.module_types }
         in
-          Manifest Signature, api
-    | Some (Mty_functor _) -> raise Not_implemented
+        Manifest Signature, api
+    | Some (Mty_functor _) ->
+        MODULE_TYPE_todo ("functor:"^ModuleType.to_string path), api
     | Some (Mty_alias _) -> assert false
   in
   let mtd = { name; doc; desc = desc; } in
-    mtd, api
+  mtd, api
 
 and read_signature res path api (acc : signature) = function
-  | Sig_value(id, v) :: rest -> begin
-      try
-        let v = read_value_description res id v in
-          read_signature res path api ((Val v) :: acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_type(id, decl, Trec_first) :: rest -> begin
-      try
-        let decl = read_type_declaration res id decl in
-        let rec loop acc' = function
-          | Sig_type(id, decl, Trec_next) :: rest ->
-              let decl = read_type_declaration res id decl in
-                loop (decl :: acc') rest
-          | rest ->
-              read_signature res path api (Types(List.rev acc') :: acc) rest
-        in
-          loop [decl] rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_type(id, decl, _) :: rest -> begin
-      try
-        let decl = read_type_declaration res id decl in
-            read_signature res path api ((Types [decl]) ::  acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_module(id, md, Trec_first) :: rest -> begin
-      try
-        let md, api = read_module_declaration res path api id md in
-        let rec loop api acc' = function
-          | Sig_module(id, md, Trec_next) :: rest ->
-              let md, api = read_module_declaration res path api id md in
-                loop api (md :: acc') rest
-          | rest ->
-              read_signature res path api (Modules(List.rev acc') :: acc) rest
-        in
-          loop api [md] rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_module(id, md, _) :: rest -> begin
-      try
-        let md, api = read_module_declaration res path api id md in
-          read_signature res path api ((Modules [md]) :: acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | Sig_modtype(id, mtd) :: rest -> begin
-      try
-        let mtd, api = read_modtype_declaration res path api id mtd in
-          read_signature res path api ((ModuleType mtd) :: acc) rest
-      with Not_implemented -> read_signature res path api acc rest
-    end
-  | _ :: rest -> read_signature res path api acc rest
+  | Sig_value(id, v) :: rest ->
+      let v = read_value_description res id v in
+      read_signature res path api ((Val v) :: acc) rest
+  | Sig_type(id, decl, Trec_first) :: rest ->
+      let decl = read_type_declaration res id decl in
+      let rec loop acc' = function
+        | Sig_type(id, decl, Trec_next) :: rest ->
+            let decl = read_type_declaration res id decl in
+            loop (decl :: acc') rest
+        | rest ->
+            read_signature res path api (Types(List.rev acc') :: acc) rest
+      in
+      loop [decl] rest
+  | Sig_type(id, decl, _) :: rest ->
+      let decl = read_type_declaration res id decl in
+      read_signature res path api ((Types [decl]) ::  acc) rest
+  | Sig_typext (id, v, Text_exception) :: rest ->
+      let decl = read_extension_constructor res id v in
+      read_signature res path api ((Exn decl) :: acc) rest
+  | Sig_module(id, md, Trec_first) :: rest ->
+      let md, api = read_module_declaration res path api id md in
+      let rec loop api acc' = function
+        | Sig_module(id, md, Trec_next) :: rest ->
+            let md, api = read_module_declaration res path api id md in
+            loop api (md :: acc') rest
+        | rest ->
+            read_signature res path api (Modules(List.rev acc') :: acc) rest
+      in
+      loop api [md] rest
+  | Sig_module(id, md, _) :: rest ->
+      let md, api = read_module_declaration res path api id md in
+      read_signature res path api ((Modules [md]) :: acc) rest
+  | Sig_modtype(id, mtd) :: rest ->
+      let mtd, api = read_modtype_declaration res path api id mtd in
+      read_signature res path api ((ModuleType mtd) :: acc) rest
+  | x :: rest ->
+      read_signature res path api (SIG_todo (Module.to_string path) :: acc) rest
   | [] -> Signature (List.rev acc), api
 
 let read_interface res path intf =
@@ -446,7 +482,7 @@ let read_interface res path intf =
   in
   let sg, api = read_signature res path api [] intf in
   let modl =
-    { path = path; doc = {info = []}; alias = None;
+    { path = path; doc = {info = []; tags = []; }; alias = None;
       type_path = None; type_ = Some sg }
   in
-    { api with modules = Module.Map.add path modl api.modules }
+  { api with modules = Module.Map.add path modl api.modules }
