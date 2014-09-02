@@ -131,17 +131,15 @@ and label =
 
 (** {3 Paths} *)
 
-and module_path =
-  | Known of Module.t
+and 'a link =
+  | Known of 'a
   | Unknown of string
 
-and module_type_path =
-  | Known of ModuleType.t
-  | Unknown of string
+and module_path = Module.t link
 
-and type_path =
-  | Known of Type.t
-  | Unknown of string
+and module_type_path = ModuleType.t link
+
+and type_path = Type.t link
 
 (** {3 Documentation} *)
 
