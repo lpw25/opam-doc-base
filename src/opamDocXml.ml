@@ -570,10 +570,10 @@ let constructor_in =
 
 let exn_in =
   let action (Open, _) name doc args ret Close: exn_ =
-    {name; doc; args; ret}
+    {name = Exn.Name.of_string name; doc; args; ret}
   in
   let open Parser in
-  !!action %(open_ exn_n) %string_in %doc_in %(list arg_in) %(opt ret_in)
+  !!action %(open_ exn_n) %name_in %doc_in %(list arg_in) %(opt ret_in)
   %(close exn_n)
 
 let type_kind_in =
@@ -1079,7 +1079,7 @@ let constructor_out output ({name; doc; args; ret;}: constructor) =
 
 let exn_out output ({name; doc; args; ret}: exn_) =
   open_ output exn_n;
-  string_out output name;
+  string_out output (Exn.Name.to_string name);
   doc_out output doc;
   list arg_out output args;
   opt ret_out output ret;

@@ -123,6 +123,13 @@ module Constructor : sig
 
 end
 
+(** Exceptions *)
+module Exn: sig
+
+  module Name: OpamMisc.ABSTRACT
+
+end
+
 (** Fields *)
 module Field : sig
 

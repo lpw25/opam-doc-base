@@ -340,6 +340,12 @@ module Field = struct
 
 end
 
+module Exn = struct
+
+  module Name = UName
+
+end
+
 type resolver = Module.Name.t -> Module.t option
 
 let rec find_module res = function

@@ -138,7 +138,7 @@ and label =
 (** {3 Exceptions} *)
 
 and exn_ =
-  { name: string;
+  { name: Exn.Name.t;
     doc: doc;
     args: type_expr list;
     ret: type_expr option; }
