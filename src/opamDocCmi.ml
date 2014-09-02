@@ -247,7 +247,20 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
       match typ.desc with
       | Tvar _ -> Var (name_of_type typ)
       | Tarrow(lbl, arg, ret, _) ->
-          Arrow(read_label lbl, read_type_expr res arg, read_type_expr res ret)
+          let label = read_label lbl in
+          let typ = match label with
+            | None
+            | Some (Label _)   -> read_type_expr res arg
+            | Some (Default _) ->
+                let is_option t =
+                  Type.Name.to_string (Type.name t) = "option"
+                in
+                match read_type_expr res arg with
+                | Constr(Known t, [x]) when is_option t -> x
+                | Constr(Unknown "option", [x]) -> x
+                | _ -> assert false (* Optional labels are *always* optional *)
+          in
+          Arrow(label, typ, read_type_expr res ret)
       | Ttuple typs -> Tuple (List.map (read_type_expr res) typs)
       | Tconstr(p, typs, _) ->
           let p =
