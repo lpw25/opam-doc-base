@@ -205,9 +205,9 @@ and tag =
   | Before of string * text
   | Deprecated of text
   | Param of string * text
-  | Raised_exception of string * text
-  | Return_value of text
-  | Custom of string * text
+  | Raise of string * text
+  | Return of text
+  | Tag of string * text
 
 type api =
   { modules: module_ OpamDocPath.Module.Map.t;

@@ -114,10 +114,9 @@ let read_tag res: Documentation.tag -> tag = function
   | Before (s, t) -> Before (s, read_text res t)
   | Deprecated t -> Deprecated (read_text res t)
   | Param (s, t) -> Param (s, read_text res t)
-  | Raised_exception (s, t) -> Raised_exception (s, read_text res t)
-  | Return_value t -> Return_value (read_text res t)
-  | Custom (s, t) -> Custom (s, read_text res t)
-
+  | Raised_exception (s, t) -> Raise (s, read_text res t)
+  | Return_value t -> Return (read_text res t)
+  | Custom (s, t) -> Tag (s, read_text res t)
 
 let read_documentation res : Documentation.t -> text * tag list = function
   | Cinfo(txt, tags) -> read_text res txt, List.map (read_tag res) tags

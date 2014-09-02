@@ -67,6 +67,8 @@ let right_n: Xmlm.name = ("","right")
 let superscript_n: Xmlm.name = ("","superscript")
 let subscript_n: Xmlm.name = ("","subscript")
 let custom_n: Xmlm.name = ("","custom")
+let style_n: Xmlm.name = ("","style")
+
 let list_n: Xmlm.name = ("","list")
 let enum_n: Xmlm.name = ("","enum")
 let newline_n: Xmlm.name = ("","newline")
@@ -86,8 +88,11 @@ let since_n: Xmlm.name = ("","since")
 let before_n: Xmlm.name = ("","before")
 let deprecated_n: Xmlm.name = ("","deprecated")
 let param_n: Xmlm.name = ("","param")
-let raised_n: Xmlm.name = ("","raised")
+let raise_n: Xmlm.name = ("","raise")
 let return_n: Xmlm.name = ("","return")
+let id_n: Xmlm.name = ("","id")
+
+let tag_n: Xmlm.name = ("","tag")
 
 let url_n: Xmlm.name = ("","url")
 let file_n: Xmlm.name = ("","file")
@@ -434,7 +439,7 @@ let rec text_element_in input =
     @@ !!right %(open_ right_n) %text_in %(close right_n)
     @@ !!super %(open_ superscript_n) %text_in %(close superscript_n)
     @@ !!sub %(open_ subscript_n) %text_in %(close subscript_n)
-    @@ !!custom %(open_ custom_n) %text_in %(close custom_n)
+    @@ !!custom %(open_ style_n) %text_in %(close style_n)
     @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
     @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
     @@ !!newline %(open_ newline_n) %(close newline_n)
@@ -455,6 +460,14 @@ and item_in input =
   in
   parser input
 
+let with_tag_in tag_n =
+  let action (Open, _) t Close = t in
+  Parser.(!!action %(open_ tag_n) %string_in %(close tag_n))
+
+let version_in = with_tag_in version_n
+let id_in = with_tag_in id_n
+let exn_name_in = with_tag_in exn_n
+
 let tag_in =
   let author (Open, _) a Close = Author a in
   let version (Open, _) v Close = Version v in
@@ -463,20 +476,20 @@ let tag_in =
   let before (Open, _) s t Close = Before (s, t) in
   let deprecated (Open, _) t Close = Deprecated t in
   let param (Open, _) s t Close = Param (s, t) in
-  let raised (Open, _) s t Close = Raised_exception (s, t) in
-  let return_value (Open, _) t Close = Return_value t in
-  let custom (Open, _) s t Close = Custom (s, t) in
+  let raise_ (Open, _) s t Close = Raise (s, t) in
+  let return (Open, _) t Close = Return t in
+  let custom (Open, _) s t Close = Tag (s, t) in
   let open Parser in
   !!author %(open_ author_n) %string_in %(close author_n)
+  @@ !!deprecated %(open_ deprecated_n) %text_in %(close since_n)
+  @@ !!param %(open_ param_n) %id_in %text_in %(close param_n)
+  @@ !!raise_ %(open_ raise_n) %exn_name_in %text_in %(close raise_n)
+  @@ !!return %(open_ return_n) %text_in %(close return_n)
   @@ !!version %(open_ version_n) %string_in %(close version_n)
   @@ !!see %(open_ see_n) %see_ref_in %text_in %(close see_n)
   @@ !!since %(open_ since_n) %string_in %(close since_n)
-  @@ !!before %(open_ before_n) %string_in %text_in %(close since_n)
-  @@ !!deprecated %(open_ deprecated_n) %text_in %(close since_n)
-  @@ !!param %(open_ param_n) %string_in %text_in %(close param_n)
-  @@ !!raised %(open_ raised_n) %string_in %text_in %(close raised_n)
-  @@ !!return_value %(open_ return_n) %text_in %(close return_n)
-  @@ !!custom %(open_ custom_n) %string_in %text_in %(close custom_n)
+  @@ !!before %(open_ before_n) %version_in %text_in %(close since_n)
+  @@ !!custom %(open_ tag_n) %name_in %text_in %(close tag_n)
 
 let tags_in = Parser.list tag_in
 
@@ -865,9 +878,9 @@ let rec text_element_out output = function
       text_out output txt;
       close output subscript_n
   | Style (Custom c, txt) ->
-      open_ output ~attrs:[custom_n, c] custom_n;
+      open_ output ~attrs:[custom_n, c] style_n;
       text_out output txt;
-      close output custom_n
+      close output style_n
   | List items ->
       open_ output list_n;
       list item_out output items;
@@ -921,15 +934,38 @@ let see_ref_out output x =
   | See_file s -> out file_n s
   | See_doc s -> out doc_n s
 
+let with_tag_out tag_n output s =
+  open_ output tag_n;
+  string_out output s;
+  close output tag_n
+
+let id_out = with_tag_out id_n
+let version_out = with_tag_out version_n
+let exn_name_out = with_tag_out exn_n
+
 let tag_out output = function
   | Author s ->
       open_ output author_n;
       string_out output s;
       close output author_n
-  | Version v ->
-      open_ output version_n;
-      string_out output v;
-      close output version_n
+  | Deprecated t ->
+      open_ output deprecated_n;
+      text_out output t;
+      close output deprecated_n
+  | Param (s, t) ->
+      open_ output param_n;
+      id_out output s;
+      text_out output t;
+      close output param_n
+  | Raise (s, t) ->
+      open_ output raise_n;
+      exn_name_out output s;
+      text_out output t;
+      close output raise_n
+  | Return t ->
+      open_ output return_n;
+      text_out output t;
+      close output return_n
   | See (r, t) ->
       open_ output see_n;
       see_ref_out output r;
@@ -941,32 +977,15 @@ let tag_out output = function
       close output since_n
   | Before (s, t) ->
       open_ output before_n;
-      string_out output s;
+      version_out output s;
       text_out output t;
       close output before_n
-  | Deprecated t ->
-      open_ output deprecated_n;
+  | Version v -> version_out output v
+  | Tag (s, t) ->
+      open_ output tag_n;
+      name_out output s;
       text_out output t;
-      close output deprecated_n
-  | Param (s, t) ->
-      open_ output param_n;
-      string_out output s;
-      text_out output t;
-      close output param_n
-  | Raised_exception (s, t) ->
-      open_ output raised_n;
-      string_out output s;
-      text_out output t;
-      close output raised_n
-  | Return_value t ->
-      open_ output return_n;
-      text_out output t;
-      close output return_n
-  | Custom (s, t) ->
-      open_ output custom_n;
-      string_out output s;
-      text_out output t;
-      close output custom_n
+      close output tag_n
 
 let tags_out output = list tag_out output
 
