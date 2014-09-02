@@ -287,8 +287,14 @@ let read_constructor_declaration res (cd : Types.constructor_declaration)
     args = List.map (read_type_expr res) cd.cd_args;
     ret = map_opt (read_type_expr res) cd.cd_res; }
 
+let opt_iter f = function None -> () | Some x -> f x
+
 let read_extension_constructor res id (e: Types.extension_constructor): exn_ =
-  { name = Ident.name id;
+  reset_names ();
+  reset_aliased ();
+  List.iter mark_type e.ext_args;
+  opt_iter mark_type e.ext_ret_type;
+  { name = Exn.Name.of_string (Ident.name id);
     doc = read_attributes res e.ext_attributes;
     args = List.map (read_type_expr res) e.ext_args;
     ret = map_opt (read_type_expr res) e.ext_ret_type; }
