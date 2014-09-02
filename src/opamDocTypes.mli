@@ -174,7 +174,6 @@ and text_element =
   | List of text list
   | Enum of text list
   | Newline
-  | Block of text
   | Title of int * string option * text
   | Ref of reference * text option
   | Target of string option * string

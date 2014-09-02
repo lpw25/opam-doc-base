@@ -406,7 +406,6 @@ let rec text_element_in input =
   let list_ (Open, _) items Close = List items in
   let enum (Open, _) items Close = Enum items in
   let newline (Open, _) Close = Newline in
-  let block (Open, _) txt Close = Block txt in
   let title (Open, attrs) txt Close =
     let level =
       try int_of_string (List.assoc level_n attrs)
@@ -439,7 +438,6 @@ let rec text_element_in input =
     @@ !!list_ %(open_ list_n) %(list item_in) %(close list_n)
     @@ !!enum %(open_ enum_n) %(list item_in) %(close enum_n)
     @@ !!newline %(open_ newline_n) %(close newline_n)
-    @@ !!block %(open_ block_n) %text_in %(close block_n)
     @@ !!title %(open_ title_n) %text_in %(close title_n)
     @@ !!reference %(open_ ref_n) %reference_in %(opt text_in) %(close ref_n)
     @@ !!target %(open_ target_n) %string_in %(close target_n)
@@ -881,10 +879,6 @@ let rec text_element_out output = function
   | Newline ->
       open_ output newline_n;
       close output newline_n
-  | Block txt ->
-      open_ output block_n;
-      text_out output txt;
-      close output block_n
   | Title (level, label, txt) ->
       let attrs =
         (level_n, string_of_int level)
