@@ -281,7 +281,7 @@ let add_unit import_graph s unit r =
   let res = resolve_name import_graph unit in
   let cmi_file = OpamUnit.Map.find unit (OpamUnitsState.unit_file s) in
   let cmti_file =
-    OpamFilename.add_extension (OpamFilename.chop_extension cmi_file) "cmt"
+    OpamFilename.add_extension (OpamFilename.chop_extension cmi_file) "cmti"
   in
   let api, timestamp =
     if OpamFilename.exists cmti_file then begin
