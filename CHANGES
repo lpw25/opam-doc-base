@@ -1,0 +1,19 @@
+0.1.3 [08/2014]
+- Support optional arguments
+- Support documentation @tags
+- Support exceptions
+- Fix automatic detections of cmti
+- Fail graciously when a construct is not supported and continue
+- Support link targets
+- Support external targets
+- Store label and level attributes for title nodes
+- Support Code, PreCode and Verbatim nodes
+
+0.1.2 [08/2014]
+- Add support for recursive types
+
+0.1.1 [08/2014]
+- Add sanity checks to opam-doc-test-state
+
+0.1.0 [08/2014]
+- add assemble.ml
