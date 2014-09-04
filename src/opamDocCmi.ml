@@ -120,7 +120,9 @@ let read_tag res: Documentation.tag -> tag = function
 
 let read_documentation res : Documentation.t -> text * tag list = function
   | Cinfo(txt, tags) -> read_text res txt, List.map (read_tag res) tags
-  | Cstop -> assert false
+  | Cstop ->
+      (* FIXME: need a better story for handling ocamldoc stop comments *)
+      [], []
 
 let rec read_attributes res : Parsetree.attributes -> doc = function
   | ({txt = "doc"}, PDoc(d, _)) :: rest ->
