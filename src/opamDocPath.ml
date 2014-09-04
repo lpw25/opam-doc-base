@@ -40,8 +40,9 @@ let check_uident x =
 let check_lident x =
   let len = String.length x in
   if len = 0 then false
-  else
-    match x.[0] with
+  else match x with
+    | ":=" -> true
+    | _ -> match x.[0] with
     | 'a' .. 'z' | '_' ->
         let ok = ref true in
         for i = 1 to (len - 1) do
