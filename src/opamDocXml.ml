@@ -1092,7 +1092,7 @@ let constructor_out output ({name; doc; args; ret;}: constructor) =
 
 let exn_out output ({name; doc; args; ret}: exn_) =
   open_ output exn_n;
-  string_out output (Exn.Name.to_string name);
+  name_out output (Exn.Name.to_string name);
   doc_out output doc;
   list arg_out output args;
   opt ret_out output ret;
