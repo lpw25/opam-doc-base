@@ -41,6 +41,9 @@ module Module : sig
   (** Return the module's parent module *)
   val parent: t -> t option
 
+  (** Fold left over module path *)
+  val fold_left : ('a -> t -> 'a) -> 'a -> t -> 'a
+
   (** Return the module's name *)
   val name: t -> Name.t
 
