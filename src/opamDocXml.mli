@@ -14,21 +14,26 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+type input = {
+  source : string option;
+  input  : Xmlm.input;
+}
+
 (** Serialize documentation to XML *)
 
 val module_to_xml: Xmlm.output -> OpamDocTypes.module_ -> unit
 
-val module_of_xml: Xmlm.input -> OpamDocTypes.module_
+val module_of_xml: input -> OpamDocTypes.module_
 
 val module_type_to_xml: Xmlm.output -> OpamDocTypes.module_type -> unit
 
-val module_type_of_xml: Xmlm.input -> OpamDocTypes.module_type
+val module_type_of_xml: input -> OpamDocTypes.module_type
 
 val library_to_xml: Xmlm.output -> OpamDocTypes.library -> unit
 
-val library_of_xml: Xmlm.input -> OpamDocTypes.library
+val library_of_xml: input -> OpamDocTypes.library
 
 val package_to_xml: Xmlm.output -> OpamDocTypes.package -> unit
 
-val package_of_xml: Xmlm.input -> OpamDocTypes.package
+val package_of_xml: input -> OpamDocTypes.package
 
