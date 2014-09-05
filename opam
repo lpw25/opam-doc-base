@@ -6,6 +6,7 @@ authors: [
 license: "ISC"
 depends: [
   "cmdliner"
+  "xmlm"
   "opam-lib"
   "opam-units"
   "ocamlgraph"
