@@ -234,7 +234,7 @@ module Module = struct
 
   let rec fold_left f a md = match md with
     | { parent = None   } -> f a md
-    | { parent = Some p } -> fold f (f a md) p
+    | { parent = Some p } -> fold_left f (f a md) p
 
   let name md = md.name
 
