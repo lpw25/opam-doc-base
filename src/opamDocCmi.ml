@@ -45,12 +45,6 @@ and read_text_element res : Documentation.text_element -> text = function
   | Code s -> [Code s]
   | PreCode s -> [PreCode s]
   | Verbatim s -> [Verbatim s]
-  | Style(SK_custom s as sty, []) ->
-      if String.length s > 1 && s.[0] = '_' then
-        let s = String.sub s 1 (String.length s - 1) in
-        read_text_element res Documentation.(Style (SK_subscript, [Raw s]))
-      else
-        [Style(read_style sty, [])]
   | Style(sk, txt) -> [Style(read_style sk, read_text res txt)]
   | List l -> [List(List.map (read_text res) l)]
   | Enum l -> [Enum(List.map (read_text res) l)]
