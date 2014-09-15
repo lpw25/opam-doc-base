@@ -55,9 +55,6 @@ and read_text_element res : Documentation.text_element -> text = function
   | List l -> [List(List.map (read_text res) l)]
   | Enum l -> [Enum(List.map (read_text res) l)]
   | Newline -> [Newline]
-  | Block txt ->
-      (* There is actually no way to build a block element with ocamldoc. *)
-      assert false
   | Title(i, l, txt) -> [Title (i, l, read_text res txt)]
   | Ref(RK_module, s, txt) -> begin
       match lookup_module res s, txt with
