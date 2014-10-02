@@ -14,17 +14,18 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open OpamDocPath
 open OpamDocTypes
 
 let test cmi =
   let cmi_info = Cmi_format.read_cmi cmi in
   let pkg = OpamPackage.of_string "foo.1" in
   let lib = OpamLibrary.create pkg (OpamLibrary.Name.of_string "bar") in
-  let name = OpamDocPath.Module.Name.of_string cmi_info.Cmi_format.cmi_name in
-  let md = OpamDocPath.Module.create lib name in
+  let name = OpamDocName.Module.of_string cmi_info.Cmi_format.cmi_name in
+  let md = Module.create (Lib lib) name in
   let res _ = None in
   let api = OpamDocCmi.read_interface res md cmi_info.Cmi_format.cmi_sign in
-  let intf = OpamDocPath.Module.Map.find md api.modules in
+  let intf = Module.Map.find md api.modules in
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
   let () = OpamDocXml.module_to_xml output intf in

@@ -24,28 +24,30 @@ module Package: module type of struct include OpamPackage end
 (* TODO better module type *)
 module Library: module type of struct include OpamLibrary end
 
+type module_
+
+type modtype
+
+type parent =
+  | Lib of Library.t
+  | Module of module_
+  | ModType of modtype
+
+val parent_to_string : parent -> string
+
 (** Modules *)
 module Module : sig
 
-  (** Module names *)
-  module Name : OpamMisc.ABSTRACT
-
-  include OpamMisc.ABSTRACT
+  include OpamMisc.ABSTRACT with type t = module_
 
   (** Create a new module path *)
-  val create: OpamLibrary.t -> Name.t -> t
-
-  (** Create a new submodule path *)
-  val create_submodule: t -> Name.t -> t
+  val create: parent -> OpamDocName.Module.t -> t
 
   (** Return the module's parent module *)
-  val parent: t -> t option
-
-  (** Fold left over module path *)
-  val fold_left : ('a -> t -> 'a) -> 'a -> t -> 'a
+  val parent: t -> parent
 
   (** Return the module's name *)
-  val name: t -> Name.t
+  val name: t -> OpamDocName.Module.t
 
   (** Return the module's library *)
   val library: t -> OpamLibrary.t
@@ -58,19 +60,16 @@ end
 (** Module types *)
 module ModuleType : sig
 
-  (** Module type names *)
-  module Name : OpamMisc.ABSTRACT
-
-  include OpamMisc.ABSTRACT
+  include OpamMisc.ABSTRACT with type t = modtype
 
   (** Create a new module type path *)
-  val create: Module.t -> Name.t -> t
+  val create: parent -> OpamDocName.ModuleType.t -> t
 
   (** Return the module type's parent module *)
-  val parent: t -> Module.t
+  val parent: t -> parent
 
   (** Return the module type's name *)
-  val name: t -> Name.t
+  val name: t -> OpamDocName.ModuleType.t
 
   (** Return the module type's library *)
   val library: t -> OpamLibrary.t
@@ -83,65 +82,36 @@ end
 (** Types *)
 module Type : sig
 
-  (** Type names *)
-  module Name : OpamMisc.ABSTRACT
-
   type t
 
   (** Create a new type path *)
-  val create: Module.t -> Name.t -> t
+  val create: parent -> OpamDocName.Type.t -> t
 
   (** Return the type's parent module *)
-  val parent: t -> Module.t
+  val parent: t -> parent
 
   (** Return the type's name *)
-  val name: t -> Name.t
+  val name: t -> OpamDocName.Type.t
 
 end
 
 (** Values *)
 module Value : sig
 
-  (** Value names *)
-  module Name : OpamMisc.ABSTRACT
-
   type t
 
   (** Create a new value path *)
-  val create: Module.t -> Name.t -> t
+  val create: parent -> OpamDocName.Value.t -> t
 
   (** Return the module's parent module *)
-  val parent: t -> Module.t
+  val parent: t -> parent
 
   (** Return the value's name *)
-  val name: t -> Name.t
+  val name: t -> OpamDocName.Value.t
 
 end
 
-(** Constructors *)
-module Constructor : sig
-
-  (** Constructor names *)
-  module Name : OpamMisc.ABSTRACT
-
-end
-
-(** Exceptions *)
-module Exn: sig
-
-  module Name: OpamMisc.ABSTRACT
-
-end
-
-(** Fields *)
-module Field : sig
-
-  (** Field names *)
-  module Name : OpamMisc.ABSTRACT
-
-end
-
-type resolver = Module.Name.t -> Module.t option
+type resolver = OpamDocName.Module.t -> Module.t option
 
 val find_module: resolver -> Path.t -> Module.t option
 

@@ -21,6 +21,8 @@ open Parsetree
 open Types
 open OpamDocTypes
 
+module Name = OpamDocName
+
 let map_opt f = function
   | None -> None
   | Some x -> Some (f x)
@@ -246,7 +248,7 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
             | Some (Label _)   -> read_type_expr res arg
             | Some (Default _) ->
                 let is_option t =
-                  Type.Name.to_string (Type.name t) = "option"
+                  Name.Type.to_string (Type.name t) = "option"
                 in
                 match read_type_expr res arg with
                 | Constr(Known t, [x]) when is_option t -> x
@@ -278,7 +280,7 @@ let read_type_scheme res (typ : Types.type_expr) : type_expr =
   read_type_expr res typ
 
 let read_value_description res id (v : Types.value_description): val_ =
-  { name = Value.Name.of_string (Ident.name id);
+  { name = Name.Value.of_string (Ident.name id);
     doc = read_attributes res v.val_attributes;
     type_ = read_type_scheme res v.val_type; }
 
@@ -289,7 +291,7 @@ let rec read_type_param res (typ : Types.type_expr) =
 
 let read_constructor_declaration res (cd : Types.constructor_declaration)
   : constructor =
-  { name = Constructor.Name.of_string (Ident.name cd.cd_id);
+  { name = Name.Constructor.of_string (Ident.name cd.cd_id);
     doc = read_attributes res cd.cd_attributes;
     args = List.map (read_type_expr res) cd.cd_args;
     ret = map_opt (read_type_expr res) cd.cd_res; }
@@ -301,13 +303,13 @@ let read_extension_constructor res id (e: Types.extension_constructor): exn_ =
   reset_aliased ();
   List.iter mark_type e.ext_args;
   opt_iter mark_type e.ext_ret_type;
-  { name = Exn.Name.of_string (Ident.name id);
+  { name = Name.Exn.of_string (Ident.name id);
     doc = read_attributes res e.ext_attributes;
     args = List.map (read_type_expr res) e.ext_args;
     ret = map_opt (read_type_expr res) e.ext_ret_type; }
 
 let read_label_declaration res (ld : Types.label_declaration) : field =
-  { name = Field.Name.of_string (Ident.name ld.ld_id);
+  { name = Name.Field.of_string (Ident.name ld.ld_id);
     doc = read_attributes res ld.ld_attributes;
     type_ = read_type_expr res ld.ld_type; }
 
@@ -326,15 +328,15 @@ let read_type_declaration res id (decl : Types.type_declaration) =
   List.iter mark_type decl.type_params;
   iter_opt mark_type decl.type_manifest;
   mark_type_kind decl.type_kind;
-  { name = Type.Name.of_string (Ident.name id);
+  { name = Name.Type.of_string (Ident.name id);
     doc = read_attributes res decl.type_attributes;
     param = List.map (read_type_param res) decl.type_params;
     manifest = map_opt (read_type_expr res) decl.type_manifest;
     decl = read_type_kind res decl.type_kind; }
 
-let rec read_module_declaration res path api id (md : Types.module_declaration) =
-  let name = Module.Name.of_string (Ident.name id) in
-  let path = Module.create_submodule path name in
+let rec read_module_declaration res parent api id (md : Types.module_declaration) =
+  let name = Name.Module.of_string (Ident.name id) in
+  let path = Module.create parent name in
   let doc = read_attributes res md.md_attributes in
   let (desc : nested_module_desc), api =
     match md.md_type with
@@ -353,7 +355,8 @@ let rec read_module_declaration res path api id (md : Types.module_declaration) 
         in
         Type (Path p), api
     | Mty_signature sg ->
-        let sg, api = read_signature res path api [] sg in
+        let parent : parent = Module path in
+        let sg, api = read_signature res parent api [] sg in
         let modl : module_ =
           { path = path; doc; alias = None;
             type_path = None; type_ = Some sg }
@@ -381,9 +384,10 @@ let rec read_module_declaration res path api id (md : Types.module_declaration) 
   let md : nested_module = { name; doc; desc } in
   md, api
 
-and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) =
-  let name = ModuleType.Name.of_string (Ident.name id) in
-  let path = ModuleType.create path' name in
+and read_modtype_declaration res parent api id
+                             (mtd : Types.modtype_declaration) =
+  let name = Name.ModuleType.of_string (Ident.name id) in
+  let path = ModuleType.create parent name in
   let doc = read_attributes res mtd.mtd_attributes in
   let desc, api =
     match mtd.mtd_type with
@@ -411,8 +415,7 @@ and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) 
         in
         Manifest (Path p), api
     | Some (Mty_signature sg) ->
-        (* TODO use correct path when paths can include parent module types *)
-        let sg, api = read_signature res path' api [] sg in
+        let sg, api = read_signature res (ModType path) api [] sg in
         let mty =
           { path = path; doc; alias = None; expr = Some sg; }
         in
@@ -428,10 +431,10 @@ and read_modtype_declaration res path' api id (mtd : Types.modtype_declaration) 
   let mtd = { name; doc; desc = desc; } in
   mtd, api
 
-and read_signature res path api (acc : signature) = function
+and read_signature res parent api (acc : signature) = function
   | Sig_value(id, v) :: rest ->
       let v = read_value_description res id v in
-      read_signature res path api ((Val v) :: acc) rest
+      read_signature res parent api ((Val v) :: acc) rest
   | Sig_type(id, decl, Trec_first) :: rest ->
       let decl = read_type_declaration res id decl in
       let rec loop acc' = function
@@ -439,33 +442,34 @@ and read_signature res path api (acc : signature) = function
             let decl = read_type_declaration res id decl in
             loop (decl :: acc') rest
         | rest ->
-            read_signature res path api (Types(List.rev acc') :: acc) rest
+            read_signature res parent api (Types(List.rev acc') :: acc) rest
       in
       loop [decl] rest
   | Sig_type(id, decl, _) :: rest ->
       let decl = read_type_declaration res id decl in
-      read_signature res path api ((Types [decl]) ::  acc) rest
+      read_signature res parent api ((Types [decl]) ::  acc) rest
   | Sig_typext (id, v, Text_exception) :: rest ->
       let decl = read_extension_constructor res id v in
-      read_signature res path api ((Exn decl) :: acc) rest
+      read_signature res parent api ((Exn decl) :: acc) rest
   | Sig_module(id, md, Trec_first) :: rest ->
-      let md, api = read_module_declaration res path api id md in
+      let md, api = read_module_declaration res parent api id md in
       let rec loop api acc' = function
         | Sig_module(id, md, Trec_next) :: rest ->
-            let md, api = read_module_declaration res path api id md in
+            let md, api = read_module_declaration res parent api id md in
             loop api (md :: acc') rest
         | rest ->
-            read_signature res path api (Modules(List.rev acc') :: acc) rest
+            read_signature res parent api (Modules(List.rev acc') :: acc) rest
       in
       loop api [md] rest
   | Sig_module(id, md, _) :: rest ->
-      let md, api = read_module_declaration res path api id md in
-      read_signature res path api ((Modules [md]) :: acc) rest
+      let md, api = read_module_declaration res parent api id md in
+      read_signature res parent api ((Modules [md]) :: acc) rest
   | Sig_modtype(id, mtd) :: rest ->
-      let mtd, api = read_modtype_declaration res path api id mtd in
-      read_signature res path api ((ModuleType mtd) :: acc) rest
+      let mtd, api = read_modtype_declaration res parent api id mtd in
+      read_signature res parent api ((ModuleType mtd) :: acc) rest
   | x :: rest ->
-      read_signature res path api (SIG_todo (Module.to_string path) :: acc) rest
+      read_signature res parent api
+        (SIG_todo (parent_to_string parent) :: acc) rest
   | [] -> Signature (List.rev acc), api
 
 let read_interface res path intf =
@@ -473,7 +477,7 @@ let read_interface res path intf =
     { modules = Module.Map.empty;
       module_types = ModuleType.Map.empty }
   in
-  let sg, api = read_signature res path api [] intf in
+  let sg, api = read_signature res (Module path) api [] intf in
   let modl =
     { path = path; doc = {info = []; tags = []; }; alias = None;
       type_path = None; type_ = Some sg }

@@ -15,276 +15,131 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+module Name = OpamDocName
+
 module Package = OpamPackage
 
 module Library = OpamLibrary
 
-let check_uident x =
-  let len = String.length x in
-  if len = 0 then false
-  else
-    match x.[0] with
-    | 'A' .. 'Z' ->
-        let ok = ref true in
-        for i = 1 to (len - 1) do
-          match x.[i] with
-          | 'A' .. 'Z'
-          | 'a' .. 'z'
-          | '0' .. '9'
-          | '_' | '\'' -> ()
-          | c -> ok := false
-        done;
-        !ok
-    | c -> false
+type module_ =
+  { parent: parent;
+    name: Name.Module.t; }
 
-let check_lident x =
-  let len = String.length x in
-  if len = 0 then false
-  else match x with
-    | ":=" -> true
-    | _ -> match x.[0] with
-    | 'a' .. 'z' | '_' ->
-        let ok = ref true in
-        for i = 1 to (len - 1) do
-          match x.[i] with
-          | 'A' .. 'Z'
-          | 'a' .. 'z'
-          | '0' .. '9'
-          | '_' | '\'' -> ()
-          | c -> ok := false
-        done;
-        !ok
-    | c -> false
+and modtype =
+  { parent: parent;
+    name: Name.ModuleType.t; }
 
-let check_tident x =
-  let len = String.length x in
-  if len = 0 then false
-  else match x.[0] with
-    | '#' -> len > 1 && check_lident (String.sub x 1 (len-1))
-    | 'a' .. 'z' | '_' ->
-        let ok = ref true in
-        for i = 1 to (len - 1) do
-          match x.[i] with
-          | 'A' .. 'Z'
-          | 'a' .. 'z'
-          | '0' .. '9'
-          | '_' | '\'' -> ()
-          | c -> ok := false
-        done;
-        !ok
-    | c -> false
-
-let check_operator x =
-  let len = String.length x in
-  if len = 0 then None
-  else
-    let first, last =
-      if (len > 2) && (x.[0] = '(') && (x.[len - 1] = ')') then 1, len-2
-      else 0, len-1
-    in
-    if not (String.contains "=<>@^|&+-*/$%!?~" x.[first]) then None
-    else
-      let ok = ref true in
-      for i = first + 1 to last - 1 do
-        if not (String.contains "!$%&*+-./:<=>?@^|~" x.[i]) then ok := false
-      done;
-      if !ok then Some (String.sub x first ((last - first) + 1))
-      else None
-
-module UName = struct
-
-  type t = string
-
-  let to_string x = x
-
-  let of_string x =
-    if check_uident x then x
-    else failwith ("Invalid uppercase name " ^ x)
-
-  let to_json x = `String x
-
-  let compare n1 n2 =
-    match compare (String.lowercase n1) (String.lowercase n2) with
-    | 0 -> compare n1 n2
-    | i -> i
-
-  module O = struct
-    type t = string
-    let compare = compare
-    let to_string = to_string
-    let to_json = to_json
-  end
-
-  module Set = OpamMisc.Set.Make(O)
-
-  module Map = OpamMisc.Map.Make(O)
-
-end
-
-module LName = struct
-
-  type t = string
-
-  let to_string x = x
-
-  let of_string x =
-    if check_lident x then x
-    else failwith ("Invalid lowercase name " ^ x)
-
-  let to_json s = `String s
-
-  let compare n1 n2 =
-    match compare (String.lowercase n1) (String.lowercase n2) with
-    | 0 -> compare n1 n2
-    | i -> i
-
-  module O = struct
-    type t = string
-    let compare = compare
-    let to_string = to_string
-    let to_json = to_json
-  end
-
-  module Set = OpamMisc.Set.Make(O)
-
-  module Map = OpamMisc.Map.Make(O)
-
-end
-
-module TName = struct
-
-  type t = string
-
-  let to_string x = x
-
-  let of_string x =
-    if check_tident x then x
-    else failwith ("Invalid type name " ^ x)
-
-  let to_json s = `String s
-
-  let compare n1 n2 =
-    match compare (String.lowercase n1) (String.lowercase n2) with
-    | 0 -> compare n1 n2
-    | i -> i
-
-  module O = struct
-    type t = string
-    let compare = compare
-    let to_string = to_string
-    let to_json = to_json
-  end
-
-  module Set = OpamMisc.Set.Make(O)
-
-  module Map = OpamMisc.Map.Make(O)
-
-end
-
-module ValName = struct
-
-  type t = string
-
-  let to_string x = x
-
-  let of_string x =
-    if check_lident x then x
-    else match check_operator x with
-      | Some x -> "(" ^ x ^ ")"
-      | None -> failwith ("Invalid name " ^ x)
-
-  let to_json s = `String s
-
-  let compare n1 n2 =
-    match compare (String.lowercase n1) (String.lowercase n2) with
-    | 0 -> compare n1 n2
-    | i -> i
-
-  module O = struct
-    type t = string
-    let compare = compare
-    let to_string = to_string
-    let to_json = to_json
-  end
-
-  module Set = OpamMisc.Set.Make(O)
-
-  module Map = OpamMisc.Map.Make(O)
-
-end
+and parent =
+  | Lib of Library.t
+  | Module of module_
+  | ModType of modtype
 
 let lib_sep = '/'
 
-let mod_sep = '.'
+let module_sep = '.'
+
+let modtype_sep = ':'
+
+let rec module_to_string (md : module_) =
+  parent_to_string md.parent
+  ^ Name.Module.to_string md.name
+
+and modtype_to_string (mty : modtype) =
+  parent_to_string mty.parent
+  ^ Name.ModuleType.to_string mty.name
+
+and parent_to_string = function
+  | Lib lib ->
+      Printf.sprintf "%s%c"
+        (Library.to_string lib) lib_sep
+  | Module md ->
+      Printf.sprintf "%s%c"
+        (module_to_string md) module_sep
+  | ModType mty ->
+      Printf.sprintf "%s%c"
+        (modtype_to_string mty) modtype_sep
+
+let rec parent_library = function
+  | Lib l -> l
+  | Module md -> parent_library md.parent
+  | ModType mty -> parent_library mty.parent
+
+let parent_list p =
+  let rec loop p acc =
+    match p with
+    | Lib _ -> p :: acc
+    | Module md -> loop md.parent (p :: acc)
+    | ModType mty -> loop mty.parent (p :: acc)
+  in
+    loop p []
+
+let compare_parent p1 p2 =
+  let compare_name p1 p2 =
+    match p1, p2 with
+    | Lib lib1, Lib lib2 -> Library.compare lib1 lib2
+    | Module md1, Module md2 -> Name.Module.compare md1.name md2.name
+    | ModType mty1, ModType mty2 -> Name.ModuleType.compare mty1.name mty2.name
+    | Module _, ModType _ -> -1
+    | ModType _, Module _ -> 1
+    | _, _ -> assert false
+  in
+  let rec compare_list l1 l2 =
+    match l1, l2 with
+    | [], [] -> 0
+    | p1 :: rest1, p2 :: rest2 ->
+        let c = compare_name p1 p2 in
+        if c <> 0 then c
+        else compare_list rest1 rest2
+    | [], _ -> 1
+    | _, [] -> -1
+  in
+    compare_list (parent_list p1) (parent_list p2)
+
+let compare_module (md1 : module_) (md2 : module_) =
+  let c = compare_parent md1.parent md2.parent in
+  if c = 0 then Name.Module.compare md1.name md2.name
+  else c
+
+let compare_modtype (mty1 : modtype) (mty2 : modtype) =
+  let c = compare_parent mty1.parent mty2.parent in
+  if c = 0 then Name.ModuleType.compare mty1.name mty2.name
+  else c
+
+let rec module_to_json (md : module_) =
+  `O [ ("parent", parent_to_json md.parent);
+       ("name", `String (Name.Module.to_string md.name)); ]
+
+and modtype_to_json (mty : modtype) =
+  `O [ ("parent", parent_to_json mty.parent);
+       ("name", `String (Name.ModuleType.to_string mty.name)); ]
+
+and parent_to_json = function
+  | Lib lib -> `O [("library", Library.to_json lib)]
+  | Module md -> `O [("module", module_to_json md)]
+  | ModType mty -> `O [("modtype", modtype_to_json mty)]
+
 
 module Module = struct
 
-  module Name = UName
+  type t = module_
 
-  type t =
-    { library: Library.t option;
-      parent: t option;
-      name: Name.t; }
+  let create parent name : t = { parent; name }
 
-  let create lib name = { library = Some lib; parent = None; name }
+  let parent (md : t) = md.parent
 
-  let create_submodule par name = { library = None; parent = Some par; name }
+  let name (md : t) = md.name
 
-  let parent md = md.parent
+  let library (md : t) = parent_library md.parent
 
-  let rec fold_left f a md = match md with
-    | { parent = None   } -> f a md
-    | { parent = Some p } -> fold_left f (f a md) p
+  let package (md : t) = OpamLibrary.package (library md)
 
-  let name md = md.name
-
-  let rec library md =
-    match md.library, md.parent with
-    | Some lib, None -> lib
-    | None, Some par -> library par
-    | _, _ -> assert false
-
-  let package md = OpamLibrary.package (library md)
-
-  let rec to_string md =
-    match md.library, md.parent with
-    | Some lib, None ->
-        Printf.sprintf "%s%c%s"
-          (OpamLibrary.to_string lib) lib_sep
-          (Name.to_string md.name)
-    | None, Some par ->
-        Printf.sprintf "%s%c%s"
-          (to_string par) mod_sep
-          (Name.to_string md.name)
-    | _ -> assert false
+  let to_string = module_to_string
 
   let of_string s = failwith "Not implemented"
 
-  let rec compare md1 md2 =
-    let c =
-      match md1.library, md1.parent, md2.library, md2.parent with
-      | Some lib1, None, Some lib2, None -> OpamLibrary.compare lib1 lib2
-      | None, Some par1, None, Some par2 -> compare par1 par2
-      | Some _, None, None, Some par2 ->
-          let c = compare md1 par2 in
-          if c = 0 then -1 else c
-      | None, Some par1, Some _, None ->
-          let c = compare par1 md2 in
-          if c = 0 then 1 else c
-      | _, _, _, _ -> assert false
-    in
-    if c = 0 then Name.compare md1.name md2.name
-    else c
+  let compare = compare_module
 
-  let rec to_json md =
-    match md.library, md.parent with
-    | Some lib, None ->
-        `O [ ("library", OpamLibrary.to_json lib);
-             ("name", `String (Name.to_string md.name)); ]
-    | None, Some par ->
-        `O [ ("parent", to_json par);
-             ("name", `String (Name.to_string md.name)); ]
-    | _ -> assert false
+  let to_json = module_to_json
 
   module O = struct
     type tmp = t
@@ -302,37 +157,25 @@ end
 
 module ModuleType = struct
 
-  module Name = UName
+  type t = modtype
 
-  type t =
-    { parent: Module.t;
-      name: Name.t; }
+  let create parent name : t = { parent; name }
 
-  let create parent name = { parent; name }
+  let parent (mty : t) = mty.parent
 
-  let parent mty = mty.parent
+  let name (mty : t) = mty.name
 
-  let name mty = mty.name
+  let library (mty : t) = parent_library mty.parent
 
-  let library mty = Module.library mty.parent
+  let package (mty : t) = OpamLibrary.package (library mty)
 
-  let package md = OpamLibrary.package (library md)
-
-  let to_string mty =
-    Printf.sprintf "%s%c%s"
-      (Module.to_string mty.parent) mod_sep
-      (Name.to_string mty.name)
+  let to_string = modtype_to_string
 
   let of_string s = failwith "Not implemented"
 
-  let compare mty1 mty2 =
-    match Module.compare mty1.parent mty2.parent with
-    | 0 -> Name.compare mty1.name mty2.name
-    | i -> i
+  let compare = compare_modtype
 
-  let to_json mty =
-    `O [ ("parent", Module.to_json mty.parent);
-         ("name", `String (Name.to_string mty.name)); ]
+  let to_json = modtype_to_json
 
   module O = struct
     type tmp = t
@@ -351,64 +194,42 @@ end
 
 module Type = struct
 
-  module Name = TName
-
   type t =
-    { parent: Module.t;
-      name: Name.t; }
+    { parent: parent;
+      name: Name.Type.t; }
 
-  let create parent name = { parent; name }
+  let create parent name : t = { parent; name }
 
-  let parent mty = mty.parent
+  let parent ty = ty.parent
 
-  let name mty = mty.name
+  let name ty = ty.name
 
 end
 
 module Value = struct
 
-  module Name = ValName
-
   type t =
-    { parent: Module.t;
-      name: Name.t; }
+    { parent: parent;
+      name: Name.Value.t; }
 
-  let create parent name = { parent; name }
+  let create parent name : t = { parent; name }
 
-  let parent mty = mty.parent
+  let parent v = v.parent
 
-  let name mty = mty.name
-
-end
-
-module Constructor = struct
-
-  module Name = UName
+  let name v = v.name
 
 end
 
-module Field = struct
-
-  module Name = LName
-
-end
-
-module Exn = struct
-
-  module Name = UName
-
-end
-
-type resolver = Module.Name.t -> Module.t option
+type resolver = Name.Module.t -> Module.t option
 
 let rec find_module res = function
   | Path.Pident id ->
-      if Ident.persistent id then res (Ident.name id)
+      if Ident.persistent id then res (Name.Module.of_string (Ident.name id))
       else None
   | Path.Pdot(p, s, _) -> begin
       match find_module res p with
       | None -> None
-      | Some md -> Some (Module.create_submodule md s)
+      | Some md -> Some (Module.create (Module md) (Name.Module.of_string s))
     end
   | Path.Papply _ -> None
 
@@ -417,7 +238,8 @@ let find_module_type res = function
   | Path.Pdot(p, s, _) -> begin
       match find_module res p with
       | None -> None
-      | Some md -> Some (ModuleType.create md s)
+      | Some md ->
+          Some (ModuleType.create (Module md) (Name.ModuleType.of_string s))
     end
   | Path.Papply _ -> None
 
@@ -426,7 +248,7 @@ let find_type res = function
   | Path.Pdot(p, s, _) -> begin
       match find_module res p with
       | None -> None
-      | Some md -> Some (Type.create md s)
+      | Some md -> Some (Type.create (Module md) (Name.Type.of_string s))
     end
   | Path.Papply _ -> None
 
@@ -435,51 +257,49 @@ let find_value res = function
   | Path.Pdot(p, s, _) -> begin
       match find_module res p with
       | None -> None
-      | Some md -> Some (Value.create md s)
+      | Some md -> Some (Value.create (Module md) (Name.Value.of_string s))
     end
   | Path.Papply _ -> None
 
 let rec lookup_module res = function
-  | Longident.Lident s -> res s
+  | Longident.Lident s -> res (Name.Module.of_string s)
   | Longident.Ldot(p, s) ->
-      if not (check_uident s) then None
-      else begin
+      begin
         match lookup_module res p with
         | None -> None
-        | Some md -> Some (Module.create_submodule md s)
+        | Some md ->
+            Some (Module.create (Module md) (Name.Module.of_string s))
       end
   | Longident.Lapply _ -> None
 
 let lookup_module_type res = function
   | Longident.Lident s -> None
   | Longident.Ldot(p, s) ->
-      if not (check_uident s) then None
-      else begin
+      begin
         match lookup_module res p with
         | None -> None
-        | Some md -> Some (ModuleType.create md s)
+        | Some md ->
+            Some (ModuleType.create (Module md) (Name.ModuleType.of_string s))
       end
   | Longident.Lapply _ -> None
 
 let lookup_type res = function
   | Longident.Lident s -> None
   | Longident.Ldot(p, s) ->
-      if not (check_lident s) then None
-      else begin
+      begin
         match lookup_module res p with
         | None -> None
-        | Some md -> Some (Type.create md s)
+        | Some md -> Some (Type.create (Module md) (Name.Type.of_string s))
       end
   | Longident.Lapply _ -> None
 
 let lookup_value res = function
   | Longident.Lident s -> None
   | Longident.Ldot(p, s) ->
-      if not (check_lident s) then None
-      else begin
+      begin
         match lookup_module res p with
         | None -> None
-        | Some md -> Some (Value.create md s)
+        | Some md -> Some (Value.create (Module md) (Name.Value.of_string s))
       end
   | Longident.Lapply _ -> None
 

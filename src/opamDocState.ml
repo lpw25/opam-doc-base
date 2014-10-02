@@ -18,6 +18,8 @@ open OpamDocPath
 open OpamDocTypes
 open OpamState.Types
 
+module Name = OpamDocName
+
 type state =
   { timestamp: float;
     unit_timestamp: float OpamUnit.Map.t;
@@ -116,7 +118,7 @@ let package_file r pkg =
 
 let library_directory r lib =
   let pkg_dir = package_directory r (Library.package lib) in
-  let lib_str = Library.Name.to_string (Library.name lib) in
+  let lib_str = Name.Library.to_string (Library.name lib) in
   let dir = OpamFilename.OP.(pkg_dir / lib_str) in
   if not (OpamFilename.exists_dir dir) then OpamFilename.mkdir dir;
   dir
@@ -124,6 +126,18 @@ let library_directory r lib =
 let library_file r lib =
   let lib_dir = library_directory r lib in
   OpamFilename.OP.(lib_dir // OpamDocBaseConfig.lib_idx_name)
+
+let rec parent_prefix r p acc =
+  match p with
+  | Lib lib -> acc
+  | Module md ->
+      let name = (Name.Module.to_string (Module.name md)) in
+      let acc = name ^ "." ^ acc in
+        parent_prefix r (Module.parent md) acc
+  | ModType mty ->
+      let name = (Name.ModuleType.to_string (ModuleType.name mty)) in
+      let acc = name ^ ":" ^ acc in
+        parent_prefix r (ModuleType.parent mty) acc
 
 let modules_directory r lib =
   let lib_dir = library_directory r lib in
@@ -135,14 +149,8 @@ let modules_directory r lib =
 
 let module_file r md =
   let mod_dir = modules_directory r (Module.library md) in
-  let rec loop acc md =
-    let name = (Module.Name.to_string (Module.name md)) in
-    let acc = name ^ "." ^ acc in
-    match Module.parent md with
-    | None -> acc
-    | Some par -> loop acc par
-  in
-  let mod_str = loop "xml" md in
+  let name = (Name.Module.to_string (Module.name md)) in
+  let mod_str = parent_prefix r (Module.parent md) (name ^ ".xml") in
   OpamFilename.OP.(mod_dir // mod_str)
 
 let module_types_directory r lib =
@@ -155,15 +163,8 @@ let module_types_directory r lib =
 
 let module_type_file r mty =
   let mty_dir = module_types_directory r (ModuleType.library mty) in
-  let name = (ModuleType.Name.to_string (ModuleType.name mty)) in
-  let rec loop acc md =
-    let name = (Module.Name.to_string (Module.name md)) in
-    let acc = name ^ "." ^ acc in
-    match Module.parent md with
-    | None -> acc
-    | Some par -> loop acc par
-  in
-  let mty_str = loop (name ^ ".xml") (ModuleType.parent mty) in
+  let name = (Name.ModuleType.to_string (ModuleType.name mty)) in
+  let mty_str = parent_prefix r (ModuleType.parent mty) (name ^ ".xml") in
   OpamFilename.OP.(mty_dir // mty_str)
 
 let read_module r path =
@@ -242,25 +243,25 @@ let resolve_name import_graph unit =
   let imports = OpamUnit.Graph.pred import_graph unit in
   let conv_unit unit =
     let name =
-      Module.Name.of_string
+      Name.Module.of_string
         (OpamUnit.Name.to_string (OpamUnit.name unit))
     in
     let lib = OpamUnit.library unit in
-    let md = Module.create lib name in
+    let md = Module.create (Lib lib) name in
     name, md
   in
   let map =
     List.fold_left
       (fun acc import ->
          let name, md = conv_unit import in
-         Module.Name.Map.add name md acc)
-      Module.Name.Map.empty imports
+         Name.Module.Map.add name md acc)
+      Name.Module.Map.empty imports
   in
   let name, md = conv_unit unit in
-  let map = Module.Name.Map.add name md map in
+  let map = Name.Module.Map.add name md map in
   let resolve name =
     try
-      Some (Module.Name.Map.find name map)
+      Some (Name.Module.Map.find name map)
     with Not_found -> None
   in
   resolve
@@ -275,10 +276,10 @@ let add_module_type path md r =
 
 let add_unit import_graph s unit r =
   let name =
-    Module.Name.of_string (OpamUnit.Name.to_string (OpamUnit.name unit))
+    Name.Module.of_string (OpamUnit.Name.to_string (OpamUnit.name unit))
   in
   let lib = OpamUnit.library unit in
-  let md = Module.create lib name in
+  let md = Module.create (Lib lib) name in
   let res = resolve_name import_graph unit in
   let cmi_file = OpamUnit.Map.find unit (OpamUnitsState.unit_file s) in
   let cmti_file =
@@ -309,7 +310,7 @@ let add_library path units r =
     OpamUnit.Set.fold
       (fun unit acc ->
          let name = OpamUnit.name unit in
-         let md = Module.Name.of_string (OpamUnit.Name.to_string name) in
+         let md = Name.Module.of_string (OpamUnit.Name.to_string name) in
          md :: acc)
       units []
   in

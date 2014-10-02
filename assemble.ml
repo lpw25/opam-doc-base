@@ -30,7 +30,8 @@ let doc = Flags.( v (`Compile `Byte) ["-doc"]
 
 
 (* Compilation units *)
-let opamDocPath = unit "opamDocPath" (`Path ["src"])
+let opamDocName = unit "opamDocName" (`Path ["src"])
+let opamDocPath = unit  ~flags:no_w30 "opamDocPath" (`Path ["src"])
 let opamDocTypes = unit ~flags:no_w30 "opamDocTypes" (`Path ["src"])
 let opamDocCmi = unit "opamDocCmi" (`Path ["src"])
 let opamDocCmti = unit "opamDocCmti" (`Path ["src"])
@@ -39,8 +40,8 @@ let opamDocBaseConfig  = unit "opamDocBaseConfig" (`Path ["src"])
 let opamDocState = unit "opamDocState" (`Path ["src"])
 
 let lib_units =
-  [opamDocPath; opamDocTypes; opamDocCmi; opamDocCmti;
-   opamDocXml; opamDocBaseConfig; opamDocState;]
+  [opamDocName; opamDocPath; opamDocTypes; opamDocCmi;
+   opamDocCmti; opamDocXml; opamDocBaseConfig; opamDocState;]
 
 let testCmi = unit "testCmi" (`Path ["src"])
 let testCmti = unit "testCmti" (`Path ["src"])
