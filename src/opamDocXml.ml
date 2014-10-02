@@ -17,6 +17,11 @@
 open OpamDocPath
 open OpamDocTypes
 
+type input = {
+  source : string option;
+  input  : Xmlm.input;
+}
+
 (* XML tag names *)
 
 let package_n: Xmlm.name = ("","package")
@@ -136,7 +141,7 @@ module Parser : sig
 
   val opt_list: 'a list t -> 'a list t
 
-  val run: 'a t -> Xmlm.input -> 'a
+  val run: 'a t -> input -> 'a
 
 end = struct
 
@@ -256,35 +261,40 @@ end = struct
     | `El_start((_, name), _) -> "<" ^ name ^ ">"
     | `El_end -> "<\\ ... >"
 
-  let show_error (line, column) msg =
-    OpamGlobals.error_and_exit "Parse error:%d.%d: %s" line column msg
+  let string_of_source = function
+    | None -> "?"
+    | Some p -> p
 
-  let expected_error input e =
+  let show_error source (line, column) msg =
+    let s = string_of_source source in
+    OpamGlobals.error_and_exit "Parse error:<%s>.%d.%d: %s" s line column msg
+
+  let expected_error ({ input; source }) e =
     let expected = String.concat " or " (List.map expected_msg e) in
     let pos = Xmlm.pos input in
     if Xmlm.eoi input then begin
       let msg =
         Printf.sprintf "expected %s but found end of file" expected
       in
-      show_error pos msg
+      show_error source pos msg
     end else begin
       let found = found_msg (Xmlm.peek input) in
       let msg =
-        Printf.sprintf "expected  %s but found %s" expected found
+        Printf.sprintf "expected %s but found %s" expected found
       in
-      show_error pos msg
+      show_error source pos msg
     end
 
-  let xmlm_error pos err =
+  let xmlm_error source pos err =
     let msg = Xmlm.error_message err in
-    show_error pos msg
+    show_error source pos msg
 
   let rec run p input =
-    match p input with
+    match p input.input with
     | Empty(Ok(a, _)) -> a
     | Consumed p -> run p input
     | Empty(Error e) -> expected_error input e
-    | exception (Xmlm.Error(pos, err)) -> xmlm_error pos err
+    | exception (Xmlm.Error(pos, err)) -> xmlm_error input.source pos err
 
 end
 

@@ -81,8 +81,9 @@ let read_xml parser file =
     OpamGlobals.error_and_exit "Missing file %s" (OpamFilename.prettify file);
   let ic = OpamFilename.open_in file in
   try
+    let source = Some (OpamFilename.to_string file) in
     let input = Xmlm.make_input (`Channel ic) in
-    let result = parser input in
+    let result = parser OpamDocXml.({ input; source }) in
     close_in ic;
     result
   with End_of_file | Failure _ ->
