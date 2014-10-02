@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+open OpamDocPath
 open OpamDocTypes
 
 let test cmti =
@@ -21,9 +22,9 @@ let test cmti =
   let pkg = OpamPackage.of_string "foo.1" in
   let lib = OpamLibrary.create pkg (OpamLibrary.Name.of_string "bar") in
   let name =
-    OpamDocPath.Module.Name.of_string cmti_info.Cmt_format.cmt_modname
+    OpamDocName.Module.of_string cmti_info.Cmt_format.cmt_modname
   in
-  let md = OpamDocPath.Module.create lib name in
+  let md = Module.create (Lib lib) name in
   let res _ = None in
   let tree =
     match cmti_info.Cmt_format.cmt_annots with
@@ -31,7 +32,7 @@ let test cmti =
     | _ -> failwith "Not a cmti file"
   in
   let api = OpamDocCmti.read_interface_tree res md tree in
-  let intf = OpamDocPath.Module.Map.find md api.modules in
+  let intf = Module.Map.find md api.modules in
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
   let () = OpamDocXml.module_to_xml output intf in

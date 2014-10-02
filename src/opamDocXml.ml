@@ -17,6 +17,8 @@
 open OpamDocPath
 open OpamDocTypes
 
+module Name = OpamDocName
+
 type input = {
   source : string option;
   input  : Xmlm.input;
@@ -327,7 +329,7 @@ let package_t_in =
 
 let library_t_in =
   let action (Open, _) package name Close =
-    let name = Library.Name.of_string name in
+    let name = Name.Library.of_string name in
     Library.create package name
   in
   Parser.( !!action %(open_ library_n)
@@ -335,50 +337,55 @@ let library_t_in =
            %(close library_n) )
 
 let rec module_t_in input =
-  let action (Open, _) create name Close =
-    let name = Module.Name.of_string name in
-    create name
+  let action (Open, _) parent name Close =
+    let name = Name.Module.of_string name in
+    Module.create parent name
   in
   let parser =
     Parser.( !!action %(open_ module_n)
-             %module_parent_in %name_in
+             %parent_in %name_in
              %(close module_n) )
   in
   parser input
 
-and module_parent_in input =
-  let library lib = Module.create lib in
-  let module_ md = Module.create_submodule md in
+and module_type_t_in input =
+  let action (Open, _) parent name Close =
+    let name = Name.ModuleType.of_string name in
+    ModuleType.create parent name
+  in
+  let parser =
+    let open Parser in
+      !!action %(open_ module_type_n) %parent_in %name_in %(close module_type_n)
+  in
+    parser input
+
+and parent_in input =
+  let library lib : parent = Lib lib in
+  let module_ md : parent = Module md in
+  let modtype mty : parent = ModType mty in
   let parser =
     let open Parser in
     !!library %library_t_in
     @@ !!module_ %module_t_in
+    @@ !!modtype %module_type_t_in
   in
   parser input
 
-let module_type_t_in =
-  let action (Open, _) parent name Close =
-    let name = ModuleType.Name.of_string name in
-    ModuleType.create parent name
-  in
-  let open Parser in
-  !!action %(open_ module_type_n) %module_t_in %name_in %(close module_type_n)
-
 let type_t_in =
   let action (Open, _) parent name Close =
-    let name = Type.Name.of_string name in
+    let name = Name.Type.of_string name in
     Type.create parent name
   in
   let open Parser in
-  !!action %(open_ type_n) %module_t_in %name_in %(close type_n)
+  !!action %(open_ type_n) %parent_in %name_in %(close type_n)
 
 let value_t_in =
   let action (Open, _) parent name Close =
-    let name = Value.Name.of_string name in
+    let name = Name.Value.of_string name in
     Value.create parent name
   in
   let open Parser in
-  !!action %(open_ val_n) %module_t_in %name_in %(close val_n)
+  !!action %(open_ val_n) %parent_in %name_in %(close val_n)
 
 let see_ref_in =
   let url (Open, _) s Close = Documentation.See_url s in
@@ -390,16 +397,16 @@ let see_ref_in =
   @@ !!doc %(open_ doc_n) %string_in %(close doc_n)
 
 let reference_in =
-  let module_ (Open, _) path Close = Module path in
-  let module_type (Open, _) path Close = ModuleType path in
-  let type_ (Open, _) path Close = Type path in
-  let val_ (Open, _) path Close = Val path in
+  let module_ path = Module path in
+  let module_type path = ModuleType path in
+  let type_ path = Type path in
+  let val_ path = Val path in
   let link_ (Open, _) path Close = Link path in
   let open Parser in
-  !!module_ %(open_ module_n) %module_t_in %(close module_n)
-  @@ !!module_type %(open_ module_type_n) %module_type_t_in %(close module_type_n)
-  @@ !!type_ %(open_ type_n) %type_t_in %(close type_n)
-  @@ !!val_ %(open_ val_n) %value_t_in %(close val_n)
+  !!module_ %module_t_in
+  @@ !!module_type %module_type_t_in
+  @@ !!type_ %type_t_in
+  @@ !!val_ %value_t_in
   @@ !!link_ %(open_ link_n) %string_in %(close link_n)
 
 let rec text_element_in input =
@@ -561,14 +568,14 @@ let rec type_expr_in input =
 
 let val_in =
   let action (Open, _) name doc type_ Close: val_ =
-    {name = Value.Name.of_string name; doc; type_}
+    {name = Name.Value.of_string name; doc; type_}
   in
   let open Parser in
   !!action %(open_ val_n) %name_in %doc_in %type_expr_in %(close val_n)
 
 let field_in =
   let action (Open, _) name doc type_ Close : field =
-    {name = Field.Name.of_string name; doc; type_}
+    {name = Name.Field.of_string name; doc; type_}
   in
   let open Parser in
   !!action %(open_ field_n) %name_in %doc_in %type_expr_in %(close field_n)
@@ -583,7 +590,7 @@ let arg_in =
 
 let constructor_in =
   let action (Open, _) name doc args ret Close: constructor =
-    {name = Constructor.Name.of_string name; doc; args; ret;}
+    {name = Name.Constructor.of_string name; doc; args; ret;}
   in
   let open Parser in
   !!action %(open_ constructor_n) %name_in %doc_in %(list arg_in) %(opt ret_in)
@@ -591,7 +598,7 @@ let constructor_in =
 
 let exn_in =
   let action (Open, _) name doc args ret Close: exn_ =
-    {name = Exn.Name.of_string name; doc; args; ret}
+    {name = Name.Exn.of_string name; doc; args; ret}
   in
   let open Parser in
   !!action %(open_ exn_n) %name_in %doc_in %(list arg_in) %(opt ret_in)
@@ -618,7 +625,7 @@ let param_in =
 
 let type_decl_in =
   let action (Open, _) name doc param manifest decl Close =
-    {name = Type.Name.of_string name; doc; param; manifest; decl}
+    {name = Name.Type.of_string name; doc; param; manifest; decl}
   in
   let open Parser in
   !!action %(open_ type_n) %name_in %doc_in %(list param_in) %(opt manifest_in)
@@ -626,7 +633,7 @@ let type_decl_in =
 
 let nested_module_type_in =
   let action (Open, _) name doc desc Close =
-    {name = ModuleType.Name.of_string name; doc; desc}
+    {name = Name.ModuleType.of_string name; doc; desc}
   in
   let abstract = Abstract in
   let path path = Manifest (Path path) in
@@ -642,7 +649,7 @@ let nested_module_type_in =
 
 let nested_module_in =
   let action (Open, _) name doc desc Close : nested_module =
-    {name = Module.Name.of_string name; doc; desc}
+    {name = Name.Module.of_string name; doc; desc}
   in
   let alias (Open, _) path Close : nested_module_desc= Alias path in
   let path path : nested_module_desc = Type (Path path) in
@@ -707,7 +714,7 @@ let module_in =
 
 let library_in =
   let action (Open, _) path modules Close = { path; modules; } in
-  let modl (Open, _) name Close = Module.Name.of_string name in
+  let modl (Open, _) name Close = Name.Module.of_string name in
   let open Parser in
   !!action %(open_ library_n) %library_t_in %(list (
       !!modl %(open_ module_n) %name_in  %(close module_n))
@@ -715,7 +722,7 @@ let library_in =
 
 let package_in =
   let action (Open, _) path libraries Close = { path; libraries; } in
-  let lib (Open, _) name Close = Library.Name.of_string name in
+  let lib (Open, _) name Close = Name.Library.of_string name in
   let open Parser in
   !!action %(open_ package_n) %package_t_in %(list (
       !!lib %(open_ library_n) %name_in  %(close library_n))
@@ -782,45 +789,46 @@ let package_t_out output package =
 
 let library_t_out output lib =
   let package = Library.package lib in
-  let name = Library.Name.to_string (Library.name lib) in
+  let name = Name.Library.to_string (Library.name lib) in
   open_ output library_n;
   package_t_out output package;
   name_out output name;
   close output library_n
 
 let rec module_t_out output md =
-  let parent_out output md =
-    match Module.parent md with
-    | Some par -> module_t_out output par
-    | None -> library_t_out output (Module.library md)
-  in
-  let name = Module.Name.to_string (Module.name md) in
+  let parent = Module.parent md in
+  let name = Name.Module.to_string (Module.name md) in
   open_ output module_n;
-  parent_out output md;
+  parent_out output parent;
   name_out output name;
   close output module_n
 
-let module_type_t_out output mty =
+and module_type_t_out output mty =
   let parent = ModuleType.parent mty in
-  let name = ModuleType.Name.to_string (ModuleType.name mty) in
+  let name = Name.ModuleType.to_string (ModuleType.name mty) in
   open_ output module_type_n;
-  module_t_out output parent;
+  parent_out output parent;
   name_out output name;
   close output module_type_n
 
+and parent_out output = function
+  | Lib lib -> library_t_out output lib
+  | Module md -> module_t_out output md
+  | ModType mty -> module_type_t_out output mty
+
 let type_t_out output typ =
   let parent = Type.parent typ in
-  let name = Type.Name.to_string (Type.name typ) in
+  let name = Name.Type.to_string (Type.name typ) in
   open_ output type_n;
-  module_t_out output parent;
+  parent_out output parent;
   name_out output name;
   close output type_n
 
 let value_t_out output v =
   let parent = Value.parent v in
-  let name = Value.Name.to_string (Value.name v) in
+  let name = Name.Value.to_string (Value.name v) in
   open_ output val_n;
-  module_t_out output parent;
+  parent_out output parent;
   name_out output name;
   close output val_n
 
@@ -1070,14 +1078,14 @@ let rec type_expr_out output = function
 
 let val_out output ({name; doc; type_}: val_) =
   open_ output val_n;
-  name_out output (Value.Name.to_string name);
+  name_out output (Name.Value.to_string name);
   doc_out output doc;
   type_expr_out output type_;
   close output val_n
 
 let field_out output ({name; doc; type_} : field) =
   open_ output field_n;
-  name_out output (Field.Name.to_string name);
+  name_out output (Name.Field.to_string name);
   doc_out output doc;
   type_expr_out output type_;
   close output field_n
@@ -1094,7 +1102,7 @@ let arg_out output typ =
 
 let constructor_out output ({name; doc; args; ret;}: constructor) =
   open_ output constructor_n;
-  name_out output (Constructor.Name.to_string name);
+  name_out output (Name.Constructor.to_string name);
   doc_out output doc;
   list arg_out output args;
   opt ret_out output ret;
@@ -1102,7 +1110,7 @@ let constructor_out output ({name; doc; args; ret;}: constructor) =
 
 let exn_out output ({name; doc; args; ret}: exn_) =
   open_ output exn_n;
-  name_out output (Exn.Name.to_string name);
+  name_out output (Name.Exn.to_string name);
   doc_out output doc;
   list arg_out output args;
   opt ret_out output ret;
@@ -1132,7 +1140,7 @@ let param_out output v =
 
 let type_decl_out output {name; doc; param; manifest; decl} =
   open_ output type_n;
-  name_out output (Type.Name.to_string name);
+  name_out output (Name.Type.to_string name);
   doc_out output doc;
   list param_out output param;
   opt manifest_out output manifest;
@@ -1149,7 +1157,7 @@ let nested_module_type_out output {name; doc; desc} =
     | MODULE_TYPE_todo msg -> todo_out output msg
   in
   open_ output module_type_n;
-  name_out output (ModuleType.Name.to_string name);
+  name_out output (Name.ModuleType.to_string name);
   doc_out output doc;
   module_type_desc_out output desc;
   close output module_type_n
@@ -1167,7 +1175,7 @@ let nested_module_out output ({name; doc; desc} : nested_module) =
     | MODULE_todo msg -> todo_out output msg
   in
   open_ output module_n;
-  name_out output (Module.Name.to_string name);
+  name_out output (Name.Module.to_string name);
   doc_out output doc;
   module_desc_out output desc;
   close output module_n
@@ -1227,7 +1235,7 @@ let module_out output { path; doc; alias; type_path; type_; } =
 let library_out output { path; modules; } =
   let mod_out output name =
     open_ output module_n;
-    name_out output (Module.Name.to_string name);
+    name_out output (Name.Module.to_string name);
     close output module_n;
   in
   open_ output library_n;
@@ -1238,7 +1246,7 @@ let library_out output { path; modules; } =
 let package_out output { path; libraries; } =
   let lib_out output name =
     open_ output library_n;
-    name_out output (Library.Name.to_string name);
+    name_out output (Name.Library.to_string name);
     close output library_n;
   in
   open_ output package_n;

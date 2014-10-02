@@ -22,13 +22,13 @@ open OpamDocPath
 
 type package =
   { path: Package.t;
-    libraries: Library.Name.t list; }
+    libraries: OpamDocName.Library.t list; }
 
 (** {3 Libraries} *)
 
 type library =
   { path: Library.t;
-    modules: Module.Name.t list; }
+    modules: OpamDocName.Module.t list; }
 
 (** {3 Top-level items} *)
 
@@ -66,7 +66,7 @@ and signature_item =
 (** {3 Nested modules} *)
 
 and nested_module =
-  { name: Module.Name.t;
+  { name: OpamDocName.Module.t;
     doc: doc;
     desc: nested_module_desc; }
 
@@ -76,7 +76,7 @@ and nested_module_desc =
   | MODULE_todo of string
 
 and nested_module_type =
-  { name: ModuleType.Name.t;
+  { name: OpamDocName.ModuleType.t;
     doc: doc;
     desc: nested_module_type_desc; }
 
@@ -92,7 +92,7 @@ and nested_module_type_expr =
 (** {3 Types} *)
 
 and type_ =
-  { name: Type.Name.t;
+  { name: OpamDocName.Type.t;
     doc: doc;
     param: string list;
     manifest: type_expr option;
@@ -104,20 +104,20 @@ and type_decl =
   | TYPE_todo of string
 
 and constructor =
-  { name: Constructor.Name.t;
+  { name: OpamDocName.Constructor.t;
     doc: doc;
     args: type_expr list;
     ret: type_expr option; }
 
 and field =
-  { name: Field.Name.t;
+  { name: OpamDocName.Field.t;
     doc: doc;
     type_: type_expr; }
 
 (** {3 Values} *)
 
 and val_ =
-  { name: Value.Name.t;
+  { name: OpamDocName.Value.t;
     doc: doc;
     type_: type_expr; }
 
@@ -138,7 +138,7 @@ and label =
 (** {3 Exceptions} *)
 
 and exn_ =
-  { name: Exn.Name.t;
+  { name: OpamDocName.Exn.t;
     doc: doc;
     args: type_expr list;
     ret: type_expr option; }

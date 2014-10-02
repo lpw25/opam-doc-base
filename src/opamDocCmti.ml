@@ -21,19 +21,22 @@ open Parsetree
 open Typedtree
 open OpamDocTypes
 
+module Name = OpamDocName
+
 let read_comment res : Parsetree.attribute -> doc option = function
   | ({txt = "comment"}, PDoc(d, _)) ->
       let info, tags = OpamDocCmi.read_documentation res d in
       Some {info; tags}
   | _ -> None
 
-let rec read_module_declaration res path api md =
+let rec read_module_declaration res parent api md =
   match md.md_type.mty_desc with
   | Tmty_signature sg ->
-      let name = Module.Name.of_string (Ident.name md.md_id) in
-      let path = Module.create_submodule path name in
+      let name = Name.Module.of_string (Ident.name md.md_id) in
+      let path = Module.create parent name in
       let doc = OpamDocCmi.read_attributes res md.md_attributes in
-      let sg, api = read_signature res path api sg in
+      let parent : parent = Module path in
+      let sg, api = read_signature res parent api sg in
       let modl =
         { path = path; doc; alias = None;
           type_path = None; type_ = Some sg }
@@ -50,16 +53,17 @@ let rec read_module_declaration res path api md =
           md_attributes = md.md_attributes;
           md_loc = md.md_loc; }
       in
-      OpamDocCmi.read_module_declaration res path api id md
+      OpamDocCmi.read_module_declaration res parent api id md
 
-and read_modtype_declaration res path' api mtd =
+and read_modtype_declaration res parent api mtd =
   match mtd.mtd_type with
   | Some {mty_desc = Tmty_signature sg} ->
-      let name = ModuleType.Name.of_string (Ident.name mtd.mtd_id) in
-      let path = ModuleType.create path' name in
+      let name = Name.ModuleType.of_string (Ident.name mtd.mtd_id) in
+      let path = ModuleType.create parent name in
       let doc = OpamDocCmi.read_attributes res mtd.mtd_attributes in
+      let parent : parent = ModType path in
       (* TODO use correct path when paths can include parent module types *)
-      let sg, api = read_signature res path' api sg in
+      let sg, api = read_signature res parent api sg in
       let mty =
         { path = path; doc; alias = None; expr = Some sg; }
       in
@@ -83,9 +87,9 @@ and read_modtype_declaration res path' api mtd =
           mtd_attributes = mtd.mtd_attributes;
           mtd_loc = mtd.mtd_loc; }
       in
-      OpamDocCmi.read_modtype_declaration res path' api id mtd
+      OpamDocCmi.read_modtype_declaration res parent api id mtd
 
-and read_signature_item res path api item : (signature_item * api) option =
+and read_signature_item res parent api item : (signature_item * api) option =
   match item.sig_desc with
   | Tsig_value vd ->
       let v = OpamDocCmi.read_value_description res vd.val_id vd.val_val in
@@ -101,32 +105,32 @@ and read_signature_item res path api item : (signature_item * api) option =
       let e = OpamDocCmi.read_extension_constructor res e.ext_id e.ext_type in
       Some (Exn e, api)
   | Tsig_module md ->
-      let md, api = read_module_declaration res path api md in
+      let md, api = read_module_declaration res parent api md in
       Some (Modules [md], api)
   | Tsig_recmodule mds ->
       let mds, api =
         List.fold_left
           (fun (mds, api) md ->
-             let md, api = read_module_declaration res path api md in
+             let md, api = read_module_declaration res parent api md in
              (md :: mds), api)
           ([], api) mds
       in
       Some (Modules (List.rev mds), api)
   | Tsig_modtype mtd ->
-      let mtd, api = read_modtype_declaration res path api mtd in
+      let mtd, api = read_modtype_declaration res parent api mtd in
       Some (ModuleType mtd, api)
   | Tsig_attribute attr -> begin
       match read_comment res attr with
       | None -> None
       | Some doc -> Some (Comment doc, api)
     end
-  | _ -> Some (SIG_todo (Module.to_string path), api)
+  | _ -> Some (SIG_todo (parent_to_string parent), api)
 
-and read_signature res path api sg =
+and read_signature res parent api sg =
   let items, api =
     List.fold_left
       (fun (items, api) item ->
-         match read_signature_item res path api item with
+         match read_signature_item res parent api item with
          | None -> (items, api)
          | Some (item, api) -> (item :: items, api))
       ([], api) sg.sig_items
@@ -138,7 +142,7 @@ let read_interface_tree res path intf =
     { modules = Module.Map.empty;
       module_types = ModuleType.Map.empty }
   in
-  let sg, api = read_signature res path api intf in
+  let sg, api = read_signature res (Module path) api intf in
   let doc, (sg : module_type_expr) =
     match sg with
     | Signature (Comment doc :: items) -> doc, Signature items

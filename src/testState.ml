@@ -17,16 +17,18 @@
 open OpamState.Types
 open OpamDocPath
 
+module Name = OpamDocName
+
 let parse_module_path pkg lib md =
   let pkg = Package.of_string pkg in
-  let lib = Library.create pkg (Library.Name.of_string lib) in
+  let lib = Library.create pkg (Name.Library.of_string lib) in
   let rec loop = function
     | Longident.Lident s ->
-        let name = Module.Name.of_string s in
-        Module.create lib name
+        let name = Name.Module.of_string s in
+        Module.create (Lib lib) name
     | Longident.Ldot(p, s) ->
-        let name = Module.Name.of_string s in
-        Module.create_submodule (loop p) name
+        let name = Name.Module.of_string s in
+        Module.create (Module (loop p)) name
     | Longident.Lapply _ ->
         OpamGlobals.error_and_exit "Bad module identifier %s" md
   in
