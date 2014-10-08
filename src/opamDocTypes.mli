@@ -101,7 +101,7 @@ and type_ =
 and type_decl =
   | Variant of constructor list
   | Record of field list
-  | TYPE_todo of string
+  | Extensible
 
 and constructor =
   { name: OpamDocName.Constructor.t;

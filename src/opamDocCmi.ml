@@ -319,7 +319,7 @@ let read_type_kind res : Types.type_kind -> type_decl option = function
       Some (Variant (List.map (read_constructor_declaration res) cds))
   | Type_record(lds, _) ->
       Some (Record (List.map (read_label_declaration res) lds))
-  | Type_open ->  Some (TYPE_todo "type_open")
+  | Type_open ->  Some Extensible
 
 let read_type_declaration res id (decl : Types.type_declaration) =
   reset_names ();

@@ -41,6 +41,7 @@ let param_n: Xmlm.name = ("","param")
 let manifest_n: Xmlm.name = ("","manifest")
 let variant_n: Xmlm.name = ("","variant")
 let record_n: Xmlm.name = ("","record")
+let extensible_n: Xmlm.name =("","extensible")
 let constructor_n: Xmlm.name = ("","constructor")
 let field_n: Xmlm.name = ("","field")
 let arg_n: Xmlm.name = ("","arg")
@@ -608,12 +609,12 @@ let type_kind_in =
   let abstract = None in
   let variant (Open, _) cstrs Close = Some (Variant cstrs) in
   let record (Open, _) fields Close = Some (Record fields) in
-  let todo (Open, _) msg Close = Some (TYPE_todo msg) in
+  let extensible (Open, _) Close = Some Extensible in
   let open Parser in
   !!abstract
   @@ !!variant %(open_ variant_n) %(seq constructor_in) %(close variant_n)
   @@ !!record %(open_ record_n) %(seq field_in) %(close record_n)
-  @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
+  @@ !!extensible %(open_ extensible_n) %(close extensible_n)
 
 let manifest_in =
   let action (Open, _) typ Close = typ in
@@ -1126,7 +1127,9 @@ let type_kind_out output = function
       open_ output record_n;
       list field_out output fields;
       close output record_n
-  | Some (TYPE_todo msg) -> todo_out output msg
+  | Some Extensible ->
+      open_ output extensible_n;
+      close output extensible_n
 
 let manifest_out output typ =
   open_ output manifest_n;
