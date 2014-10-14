@@ -51,6 +51,7 @@ let read_comment res : Parsetree.attribute -> doc option = function
 let read_type_extension res tyext =
   OpamDocCmi.reset_names ();
   OpamDocCmi.reset_aliased ();
+  OpamDocCmi.reset_visited_rows ();
   List.iter mark_type_parameter tyext.tyext_params;
   List.iter mark_extension_constructor tyext.tyext_constructors;
   let type_path =
@@ -149,6 +150,7 @@ and read_signature_item res parent api item : (signature_item * api) option =
   | Tsig_exception ext ->
       OpamDocCmi.reset_names ();
       OpamDocCmi.reset_aliased ();
+      OpamDocCmi.reset_visited_rows ();
       List.iter OpamDocCmi.mark_type_parameter ext.ext_type.ext_type_params;
       mark_extension_constructor ext;
       let constr =

@@ -184,27 +184,58 @@ let name_of_type (t : Types.type_expr) =
     if name <> "_" then names := (t, name) :: !names;
     name
 
-(* Handle recursive types *)
+(* Handle recursive types and shared row variables *)
 
 let aliased = ref []
 
 let reset_aliased () = aliased := []
 
-let is_aliased ty = List.memq ty !aliased
+let is_aliased ty = List.memq (Btype.proxy ty) !aliased
 
 let add_alias ty =
-  if not (is_aliased ty) then aliased := ty :: !aliased
+  let px = Btype.proxy ty in
+  if not (List.memq px !aliased) then begin
+    aliased := px :: !aliased;
+    match px.desc with
+    | Tvar name | Tunivar name -> add_used_name name
+    | _ -> ()
+  end
 
 let aliasable (ty : Types.type_expr) =
   match ty.desc with
-  | Tvar _ -> false
+  | Tvar _ | Tunivar _ | Tpoly _ -> false
   | _ -> true
+
+let visited_rows = ref []
+
+let reset_visited_rows () = visited_rows := []
+
+let is_row_visited px = List.memq px !visited_rows
+
+let visit_row row px =
+  if not (Btype.static_row row) then
+    visited_rows := px :: !visited_rows
+
+let visit_object ty px =
+  if Ctype.opened_object ty then
+    visited_rows := px :: !visited_rows
+
+let namable_row row =
+  row.row_name <> None &&
+  List.for_all
+    (fun (_, f) ->
+       match Btype.row_field_repr f with
+       | Reither(c, l, _, _) ->
+           row.row_closed && if c then l = [] else List.length l = 1
+       | _ -> true)
+    row.row_fields
 
 let mark_type ty =
   let rec loop visited ty =
     let ty = Btype.repr ty in
-    if List.memq ty visited && aliasable ty then add_alias ty else
-      let visited = ty :: visited in
+    let px = Btype.proxy ty in
+    if List.memq px visited && aliasable ty then add_alias px else
+      let visited = px :: visited in
       match ty.desc with
       | Tvar name -> add_used_name name
       | Tarrow(_, ty1, ty2, _) ->
@@ -213,6 +244,38 @@ let mark_type ty =
       | Ttuple tyl -> List.iter (loop visited) tyl
       | Tconstr(p, tyl, _) ->
           List.iter (loop visited) tyl
+      | Tvariant row ->
+          if is_row_visited px then add_alias px else
+           begin
+            let row = Btype.row_repr row in
+            visit_row row px;
+            match row.row_name with
+            | Some(p, tyl) when namable_row row ->
+                List.iter (loop visited) tyl
+            | _ ->
+                Btype.iter_row (loop visited) row
+           end
+      | Tobject (fi, nm) ->
+          if is_row_visited px then add_alias px else
+           begin
+            visit_object ty px;
+            match !nm with
+            | None ->
+                let fields, _ = Ctype.flatten_fields fi in
+                List.iter
+                  (fun (_, kind, ty) ->
+                    if Btype.field_kind_repr kind = Fpresent then
+                      loop visited ty)
+                  fields
+            | Some (_, l) ->
+                List.iter (loop visited) (List.tl l)
+          end
+      | Tfield(_, kind, ty1, ty2) when Btype.field_kind_repr kind = Fpresent ->
+          loop visited ty1;
+          loop visited ty2
+      | Tfield(_, _, _, ty2) ->
+          loop visited ty2
+      | Tnil -> ()
       | Tsubst ty -> loop visited ty
       | _ -> ()
   in
@@ -240,6 +303,7 @@ let mark_extension_constructor (_, ext) =
 
 let rec read_type_expr res (typ : Types.type_expr) : type_expr =
   let typ = Btype.repr typ in
+  let px = Btype.proxy typ in
   if List.mem_assq typ !names then Var (name_of_type typ)
   else begin
     let alias =
@@ -273,6 +337,11 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
           in
           let typs = List.map (read_type_expr res) typs in
           Constr(p, typs)
+      | Tvariant row -> read_row res px row
+      | Tobject (fi, nm) ->
+          read_object res fi !nm
+      | Tnil | Tfield _ ->
+          read_object res typ None
       | Tsubst typ -> read_type_expr res typ
       | _ -> TYPE_EXPR_todo (name_of_type typ)
     in
@@ -281,9 +350,108 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
     | None -> typ
   end
 
+and read_row res px row =
+  let row = Btype.row_repr row in
+  let fields =
+    if row.row_closed then
+      List.filter (fun (_, f) -> Btype.row_field_repr f <> Rabsent)
+        row.row_fields
+    else row.row_fields in
+  let present =
+    List.filter
+      (fun (_, f) ->
+         match Btype.row_field_repr f with
+         | Rpresent _ -> true
+         | _ -> false)
+      fields in
+  let all_present = List.length present = List.length fields in
+  match row.row_name with
+  | Some(p, typs) when namable_row row ->
+      let p =
+        match find_type res p with
+        | None -> Unknown (Path.name p)
+        | Some p -> Known p
+      in
+      let args = List.map (read_type_expr res) typs in
+      if row.row_closed && all_present then
+        Constr (p, args)
+      else
+        let kind =
+          if all_present then Open else Closed (List.map fst present)
+        in
+        Variant {kind; elements = [Type(p, args)]}
+  | _ ->
+      let elements =
+        List.map
+          (fun (l, f) ->
+            match Btype.row_field_repr f with
+              | Rpresent None ->
+                  Constructor(l, [None])
+              | Rpresent (Some typ) ->
+                  Constructor(l, [Some (read_type_expr res typ)])
+              | Reither(c, typs, _, _) ->
+                  let typs =
+                    List.map (fun ty -> Some (read_type_expr res ty)) typs
+                  in
+                  let typs =
+                    if c then None :: typs
+                    else typs
+                  in
+                    Constructor(l, typs)
+              | Rabsent -> assert false)
+          fields
+      in
+      let kind =
+        if all_present then
+          if row.row_closed then Fixed
+          else Open
+        else Closed (List.map fst present)
+      in
+      Variant {kind; elements}
+
+and read_object res fi nm =
+  match nm with
+  | None ->
+      let (fields, rest) = Ctype.flatten_fields fi in
+      let present_fields =
+        List.fold_right
+          (fun (n, k, t) l ->
+             match Btype.field_kind_repr k with
+             | Fpresent -> (n, t) :: l
+             | _ -> l)
+          fields []
+      in
+      let sorted_fields =
+        List.sort (fun (n, _) (n', _) -> compare n n') present_fields
+      in
+      let methods =
+        List.map
+          (fun (name, typ) -> {name; type_ = read_type_expr res typ})
+          sorted_fields
+      in
+      let open_ =
+        match rest.desc with
+        | Tvar _ | Tunivar _ -> true
+        | Tconstr _ -> true
+        | Tnil -> false
+        | _ -> assert false
+      in
+      Object {methods; open_}
+  | Some (p, _ :: tyl) ->
+      let p =
+        match find_type res p with
+        | None -> Unknown (Path.name p)
+        | Some p -> Known p
+      in
+      let args = List.map (read_type_expr res) tyl in
+      Class (p, args)
+  | _ -> assert false
+
+
 let read_type_scheme res (typ : Types.type_expr) : type_expr =
   reset_names ();
   reset_aliased ();
+  reset_visited_rows ();
   mark_type typ;
   read_type_expr res typ
 
@@ -320,6 +488,7 @@ let read_type_kind res : Types.type_kind -> type_decl option = function
 let read_type_declaration res id (decl : Types.type_declaration) =
   reset_names ();
   reset_aliased ();
+  reset_visited_rows ();
   List.iter mark_type_parameter decl.type_params;
   iter_opt mark_type decl.type_manifest;
   mark_type_kind decl.type_kind;
@@ -339,6 +508,7 @@ let read_extension_constructor res id (e: Types.extension_constructor): construc
 let read_type_extension res ((id, ext) as first)  rest =
   reset_names ();
   reset_aliased ();
+  reset_visited_rows ();
   List.iter mark_type_parameter ext.ext_type_params;
   mark_extension_constructor first;
   List.iter mark_extension_constructor rest;
@@ -487,6 +657,7 @@ and read_signature res parent api (acc : signature) = function
   | Sig_typext (id, ext, Text_exception) :: rest ->
       reset_names ();
       reset_aliased ();
+      reset_visited_rows ();
       List.iter mark_type_parameter ext.ext_type_params;
       mark_extension_constructor (id, ext);
       let constr = read_extension_constructor res id ext in
