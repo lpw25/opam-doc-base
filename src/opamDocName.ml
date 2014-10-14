@@ -174,5 +174,3 @@ end)
 module Constructor = UName
 
 module Field = LName
-
-module Exn = UName

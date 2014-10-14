@@ -218,6 +218,10 @@ let mark_type ty =
   in
   loop [] ty
 
+let mark_type_parameter ty =
+  add_alias ty;
+  mark_type ty
+
 let mark_type_kind = function
   | Type_abstract -> ()
   | Type_variant cds ->
@@ -229,6 +233,10 @@ let mark_type_kind = function
   | Type_record(lds, _) ->
       List.iter (fun ld -> mark_type ld.ld_type) lds
   | Type_open -> ()
+
+let mark_extension_constructor (_, ext) =
+  List.iter mark_type ext.ext_args;
+  iter_opt mark_type ext.ext_ret_type
 
 let rec read_type_expr res (typ : Types.type_expr) : type_expr =
   let typ = Btype.repr typ in
@@ -296,18 +304,6 @@ let read_constructor_declaration res (cd : Types.constructor_declaration)
     args = List.map (read_type_expr res) cd.cd_args;
     ret = map_opt (read_type_expr res) cd.cd_res; }
 
-let opt_iter f = function None -> () | Some x -> f x
-
-let read_extension_constructor res id (e: Types.extension_constructor): exn_ =
-  reset_names ();
-  reset_aliased ();
-  List.iter mark_type e.ext_args;
-  opt_iter mark_type e.ext_ret_type;
-  { name = Name.Exn.of_string (Ident.name id);
-    doc = read_attributes res e.ext_attributes;
-    args = List.map (read_type_expr res) e.ext_args;
-    ret = map_opt (read_type_expr res) e.ext_ret_type; }
-
 let read_label_declaration res (ld : Types.label_declaration) : field =
   { name = Name.Field.of_string (Ident.name ld.ld_id);
     doc = read_attributes res ld.ld_attributes;
@@ -319,20 +315,49 @@ let read_type_kind res : Types.type_kind -> type_decl option = function
       Some (Variant (List.map (read_constructor_declaration res) cds))
   | Type_record(lds, _) ->
       Some (Record (List.map (read_label_declaration res) lds))
-  | Type_open ->  Some (TYPE_todo "type_open")
+  | Type_open ->  Some Extensible
 
 let read_type_declaration res id (decl : Types.type_declaration) =
   reset_names ();
   reset_aliased ();
-  List.iter add_alias decl.type_params;
-  List.iter mark_type decl.type_params;
+  List.iter mark_type_parameter decl.type_params;
   iter_opt mark_type decl.type_manifest;
   mark_type_kind decl.type_kind;
   { name = Name.Type.of_string (Ident.name id);
     doc = read_attributes res decl.type_attributes;
     param = List.map (read_type_param res) decl.type_params;
+    private_ = (decl.type_private = Private);
     manifest = map_opt (read_type_expr res) decl.type_manifest;
     decl = read_type_kind res decl.type_kind; }
+
+let read_extension_constructor res id (e: Types.extension_constructor): constructor =
+  { name = Name.Constructor.of_string (Ident.name id);
+    doc = read_attributes res e.ext_attributes;
+    args = List.map (read_type_expr res) e.ext_args;
+    ret = map_opt (read_type_expr res) e.ext_ret_type; }
+
+let read_type_extension res ((id, ext) as first)  rest =
+  reset_names ();
+  reset_aliased ();
+  List.iter mark_type_parameter ext.ext_type_params;
+  mark_extension_constructor first;
+  List.iter mark_extension_constructor rest;
+  let type_path =
+    match find_type res ext.ext_type_path with
+    | None -> Unknown (Path.name ext.ext_type_path)
+    | Some p -> Known p
+  in
+  let type_params = List.map (read_type_param res) ext.ext_type_params in
+  let doc = read_attributes res ext.ext_attributes in
+  let private_ = (ext.ext_private = Private) in
+  let constructors =
+    List.map
+      (fun (id, ext) -> read_extension_constructor res id ext)
+      (first :: rest)
+  in
+    { type_path; type_params;
+      doc; private_;
+      constructors; }
 
 let rec read_module_declaration res parent api id (md : Types.module_declaration) =
   let name = Name.Module.of_string (Ident.name id) in
@@ -448,9 +473,24 @@ and read_signature res parent api (acc : signature) = function
   | Sig_type(id, decl, _) :: rest ->
       let decl = read_type_declaration res id decl in
       read_signature res parent api ((Types [decl]) ::  acc) rest
-  | Sig_typext (id, v, Text_exception) :: rest ->
-      let decl = read_extension_constructor res id v in
-      read_signature res parent api ((Exn decl) :: acc) rest
+  | Sig_typext (id, ext, Text_first) :: rest ->
+      let rec loop acc' = function
+        | Sig_typext(id, ext, Text_next) :: rest -> loop ((id, ext) :: acc') rest
+        | rest ->
+            let ext = read_type_extension res (id, ext) (List.rev acc') in
+              read_signature res parent api ((TypExt ext) :: acc) rest
+      in
+        loop [] rest
+  | Sig_typext (id, ext, Text_next) :: rest ->
+      let ext = read_type_extension res (id, ext) [] in
+        read_signature res parent api ((TypExt ext) :: acc) rest
+  | Sig_typext (id, ext, Text_exception) :: rest ->
+      reset_names ();
+      reset_aliased ();
+      List.iter mark_type_parameter ext.ext_type_params;
+      mark_extension_constructor (id, ext);
+      let constr = read_extension_constructor res id ext in
+        read_signature res parent api ((Exn constr) :: acc) rest
   | Sig_module(id, md, Trec_first) :: rest ->
       let md, api = read_module_declaration res parent api id md in
       let rec loop api acc' = function
