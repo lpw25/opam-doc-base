@@ -61,6 +61,7 @@ let arrow_n: Xmlm.name = ("","arrow")
 let tuple_n: Xmlm.name = ("","tuple")
 let constr_n: Xmlm.name = ("","constr")
 let object_n: Xmlm.name = ("","object")
+let poly_n: Xmlm.name = ("","poly")
 
 let label_n: Xmlm.name = ("","label")
 let default_n: Xmlm.name = ("","default")
@@ -574,8 +575,12 @@ let variant_kind_in =
              @@ !!closed %(open_ closed_n) %(list name_in) %(close closed_n)
              @@ !!openk %(open_ open_n) %(close open_n) )
 
+let var_in =
+  let action (Open, _) string Close = string in
+    Parser.( !!action %(open_ var_n) %data %(close var_n) )
+
 let rec type_expr_in input =
-  let var (Open, _) string Close = Var string in
+  let var string = Var string in
   let alias (Open, _) typ (Open, _) string Close Close = Alias(typ, string) in
   let arrow (Open, _) lbl arg ret Close = Arrow(lbl, arg, ret) in
   let tuple (Open, _) typs Close = Tuple typs in
@@ -589,10 +594,11 @@ let rec type_expr_in input =
       Object {methods; open_}
   in
   let class_ (Open, _) path typs Close = Class(path, typs) in
+  let poly (Open, _) vars typ Close = Poly(vars, typ) in
   let todo (Open, _) msg Close = TYPE_EXPR_todo msg in
   let parser =
     let open Parser in
-    !!var %(open_ var_n) %data %(close var_n)
+    !!var %var_in
     @@ !!alias %(open_ alias_n) %type_expr_in %(open_ var_n) %data
        %(close var_n) %(close alias_n)
     @@ !!arrow %(open_ arrow_n) %(opt label_in) %type_expr_in %type_expr_in
@@ -604,6 +610,7 @@ let rec type_expr_in input =
        %(list variant_element_in) %(close variant_n)
     @@ !!object_ %(open_ object_n) %(list method_in) %(close object_n)
     @@ !!class_ %(open_ class_n) %type_path_in %(list type_expr_in) %(close class_n)
+    @@ !!poly %(open_ poly_n) %(list var_in) %type_expr_in %(close poly_n)
     @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
   in
   parser input
@@ -1128,11 +1135,13 @@ let variant_kind_out output = function
       open_ output open_n;
       close output open_n
 
+let var_out output v =
+  open_ output var_n;
+  data output v;
+  close output var_n
+
 let rec type_expr_out output = function
-  | Var v ->
-      open_ output var_n;
-      data output v;
-      close output var_n
+  | Var v -> var_out output v
   | Alias(typ, v) ->
       open_ output alias_n;
       type_expr_out output typ;
@@ -1172,6 +1181,11 @@ let rec type_expr_out output = function
       type_path_out output path;
       list type_expr_out output typs;
       close output class_n
+  | Poly(vars, typ) ->
+    open_ output poly_n;
+    list var_out output vars;
+    type_expr_out output typ;
+    close output poly_n
   | TYPE_EXPR_todo msg -> todo_out output msg
 
 and variant_element_out output = function

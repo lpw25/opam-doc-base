@@ -143,6 +143,7 @@ and type_expr =
   | Variant of variant
   | Object of object_
   | Class of type_path * type_expr list
+  | Poly of string list * type_expr
   | TYPE_EXPR_todo of string
 
 and label =

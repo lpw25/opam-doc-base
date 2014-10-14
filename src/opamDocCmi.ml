@@ -143,61 +143,69 @@ let read_label lbl =
 
 (* Handle type variable names *)
 
-let names = ref []
-let name_counter = ref 0
 let used_names = ref []
+let name_counter = ref 0
+let reserved_names = ref []
 
-let reset_names () = names := []; name_counter := 0; used_names := []
+let reset_names () = used_names := []; name_counter := 0; reserved_names := []
 
-let add_used_name = function
+let reserve_name = function
   | Some name ->
-      if not (List.mem name !used_names) then
-        used_names := name :: !used_names
+      if not (List.mem name !reserved_names) then
+        reserved_names := name :: !reserved_names
   | None -> ()
 
-let rec new_name () =
+let rec next_name () =
   let name =
     if !name_counter < 26
     then String.make 1 (Char.chr(97 + !name_counter))
     else String.make 1 (Char.chr(97 + !name_counter mod 26)) ^
-         string_of_int(!name_counter / 26) in
-  incr name_counter;
-  if List.mem name !used_names
-  || List.exists (fun (_, name') -> name = name') !names
-  then new_name ()
-  else name
+           string_of_int(!name_counter / 26)
+  in
+    incr name_counter;
+    if List.mem name !reserved_names then next_name ()
+    else name
 
-let name_of_type (t : Types.type_expr) =
-  try List.assq t !names with Not_found ->
-    let name =
-      match t.desc with
-      | Tvar (Some name) | Tunivar (Some name) ->
-          let current_name = ref name in
-          let i = ref 0 in
-          while List.exists (fun (_, name') -> !current_name = name') !names do
-            current_name := name ^ (string_of_int !i);
-            i := !i + 1;
-          done;
-          !current_name
-      | _ -> new_name ()
+let rec fresh_name base =
+  let current_name = ref base in
+  let i = ref 0 in
+  while List.exists (fun (_, name') -> !current_name = name') !used_names do
+    current_name := base ^ (string_of_int !i);
+    i := !i + 1;
+  done;
+  !current_name
+
+let name_of_type (ty : Types.type_expr) =
+  try
+    List.assq ty !used_names
+  with Not_found ->
+    let base =
+      match ty.desc with
+      | Tvar (Some name) | Tunivar (Some name) -> name
+      | _ -> next_name ()
     in
-    if name <> "_" then names := (t, name) :: !names;
+    let name = fresh_name base in
+    if name <> "_" then used_names := (ty, name) :: !used_names;
     name
+
+let remove_names tyl =
+  used_names := List.filter (fun (ty,_) -> not (List.memq ty tyl)) !used_names
 
 (* Handle recursive types and shared row variables *)
 
 let aliased = ref []
+let used_aliases = ref []
 
-let reset_aliased () = aliased := []
+let reset_aliased () = aliased := []; used_aliases := []
 
-let is_aliased ty = List.memq (Btype.proxy ty) !aliased
+let is_aliased px = List.memq px !aliased
 
 let add_alias ty =
   let px = Btype.proxy ty in
   if not (List.memq px !aliased) then begin
     aliased := px :: !aliased;
     match px.desc with
-    | Tvar name | Tunivar name -> add_used_name name
+    | Tvar name | Tunivar name -> reserve_name name
     | _ -> ()
   end
 
@@ -205,6 +213,10 @@ let aliasable (ty : Types.type_expr) =
   match ty.desc with
   | Tvar _ | Tunivar _ | Tpoly _ -> false
   | _ -> true
+
+let used_alias (px : Types.type_expr) = List.memq px !used_aliases
+
+let use_alias (px : Types.type_expr) = used_aliases := px :: !used_aliases
 
 let visited_rows = ref []
 
@@ -237,7 +249,7 @@ let mark_type ty =
     if List.memq px visited && aliasable ty then add_alias px else
       let visited = px :: visited in
       match ty.desc with
-      | Tvar name -> add_used_name name
+      | Tvar name -> reserve_name name
       | Tarrow(_, ty1, ty2, _) ->
           loop visited ty1;
           loop visited ty2
@@ -276,7 +288,12 @@ let mark_type ty =
       | Tfield(_, _, _, ty2) ->
           loop visited ty2
       | Tnil -> ()
+      | Tpoly (ty, tyl) ->
+          List.iter (fun t -> add_alias t) tyl;
+          loop visited ty
+      | Tunivar name -> reserve_name name
       | Tsubst ty -> loop visited ty
+      | Tlink _ -> assert false
       | _ -> ()
   in
   loop [] ty
@@ -304,11 +321,14 @@ let mark_extension_constructor (_, ext) =
 let rec read_type_expr res (typ : Types.type_expr) : type_expr =
   let typ = Btype.repr typ in
   let px = Btype.proxy typ in
-  if List.mem_assq typ !names then Var (name_of_type typ)
+  if used_alias px then Var (name_of_type typ)
   else begin
     let alias =
-      if is_aliased typ && aliasable typ then Some (name_of_type typ)
-      else None
+      if not (is_aliased px && aliasable typ) then None
+      else begin
+        use_alias px;
+        Some (name_of_type typ)
+      end
     in
     let typ =
       match typ.desc with
@@ -338,16 +358,23 @@ let rec read_type_expr res (typ : Types.type_expr) : type_expr =
           let typs = List.map (read_type_expr res) typs in
           Constr(p, typs)
       | Tvariant row -> read_row res px row
-      | Tobject (fi, nm) ->
-          read_object res fi !nm
-      | Tnil | Tfield _ ->
-          read_object res typ None
+      | Tobject (fi, nm) -> read_object res fi !nm
+      | Tnil | Tfield _ -> read_object res typ None
+      | Tpoly (typ, []) -> read_type_expr res typ
+      | Tpoly (typ, tyl) ->
+          let tyl = List.map Btype.repr tyl in
+          let vars = List.map name_of_type tyl in
+          let typ = Poly(vars, read_type_expr res typ) in
+            remove_names tyl;
+            typ
+      | Tunivar _ -> Var (name_of_type typ)
       | Tsubst typ -> read_type_expr res typ
+      | Tlink _ -> assert false
       | _ -> TYPE_EXPR_todo (name_of_type typ)
     in
-    match alias with
-    | Some name -> Alias(typ, name)
-    | None -> typ
+      match alias with
+      | None -> typ
+      | Some name -> Alias(typ, name)
   end
 
 and read_row res px row =
