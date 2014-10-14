@@ -48,7 +48,7 @@ let testCmti = unit "testCmti" (`Path ["src"])
 let testState = unit "testState" (`Path ["src"])
 
 (* Binary and library *)
-let l = lib ~flags:doc ~deps:lib_pkgs "opam-doc-base" (`Units lib_units)
+let l = lib (*~flags:doc*) ~deps:lib_pkgs "opam-doc-base" (`Units lib_units)
 
 let testCmi = bin ~deps:(l :: bin_pkgs) "opam-doc-test-cmi" (`Units [testCmi])
 let testCmti = bin ~deps:(l :: bin_pkgs) "opam-doc-test-cmti" (`Units [testCmti])

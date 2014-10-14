@@ -22,6 +22,8 @@ val reset_names: unit -> unit
 
 val reset_aliased: unit -> unit
 
+val reset_visited_rows: unit -> unit
+
 val read_interface: OpamDocPath.resolver -> OpamDocPath.Module.t ->
   Types.signature -> OpamDocTypes.api
 

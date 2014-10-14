@@ -50,15 +50,26 @@ let return_n: Xmlm.name = ("","return")
 
 let extension_n: Xmlm.name =("","extension")
 
-let val_n: Xmlm.name = ("","val")
 let exn_n: Xmlm.name = ("","exn")
+
+let class_n : Xmlm.name =("","class")
+
+let val_n: Xmlm.name = ("","val")
 
 let var_n: Xmlm.name = ("","var")
 let arrow_n: Xmlm.name = ("","arrow")
 let tuple_n: Xmlm.name = ("","tuple")
 let constr_n: Xmlm.name = ("","constr")
+let object_n: Xmlm.name = ("","object")
+
 let label_n: Xmlm.name = ("","label")
 let default_n: Xmlm.name = ("","default")
+
+let fixed_n: Xmlm.name = ("","fixed")
+let closed_n: Xmlm.name = ("","closed")
+let open_n: Xmlm.name = ("","open")
+
+let method_n: Xmlm.name = ("","method")
 
 let path_n: Xmlm.name = ("","path")
 let name_n: Xmlm.name = ("","name")
@@ -555,12 +566,29 @@ let label_in =
   !!label %(open_ label_n) %data %(close label_n)
   @@ !!default %(open_ default_n) %data %(close default_n)
 
+let variant_kind_in =
+  let fixed (Open, _) Close = Fixed in
+  let closed (Open, _) names Close = Closed names in
+  let openk (Open, _) Close = OpamDocTypes.Open in
+    Parser.( !!fixed %(open_ fixed_n) %(close fixed_n)
+             @@ !!closed %(open_ closed_n) %(list name_in) %(close closed_n)
+             @@ !!openk %(open_ open_n) %(close open_n) )
+
 let rec type_expr_in input =
   let var (Open, _) string Close = Var string in
   let alias (Open, _) typ (Open, _) string Close Close = Alias(typ, string) in
   let arrow (Open, _) lbl arg ret Close = Arrow(lbl, arg, ret) in
   let tuple (Open, _) typs Close = Tuple typs in
   let constr (Open, _) path typs Close = Constr(path, typs) in
+  let variant (Open, _) kind elements Close = Variant {kind; elements} in
+  let object_ (Open, attrs) methods Close =
+    let open_ =
+      try bool_of_string (List.assoc open_n attrs)
+      with Not_found | Failure _ -> false
+    in
+      Object {methods; open_}
+  in
+  let class_ (Open, _) path typs Close = Class(path, typs) in
   let todo (Open, _) msg Close = TYPE_EXPR_todo msg in
   let parser =
     let open Parser in
@@ -572,7 +600,30 @@ let rec type_expr_in input =
     @@ !!tuple %(open_ tuple_n) %(list type_expr_in) %(close tuple_n)
     @@ !!constr %(open_ constr_n) %type_path_in %(list type_expr_in)
        %(close constr_n)
+    @@ !!variant %(open_ variant_n) %variant_kind_in
+       %(list variant_element_in) %(close variant_n)
+    @@ !!object_ %(open_ object_n) %(list method_in) %(close object_n)
+    @@ !!class_ %(open_ class_n) %type_path_in %(list type_expr_in) %(close class_n)
     @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
+  in
+  parser input
+
+and variant_element_in input =
+  let type_ (Open, _) path typs Close : variant_element = Type(path, typs) in
+  let constructor (Open, _) name typs Close = Constructor(name, typs) in
+  let parser =
+    Parser.( !!type_ %(open_ type_n) %type_path_in
+                     %(list type_expr_in) %(close type_n)
+              @@ !!constructor %(open_ constructor_n) %name_in
+                     %(list (opt type_expr_in)) %(close constructor_n) )
+  in
+  parser input
+
+and method_in input =
+  let action (Open, _) name type_ Close = {name; type_} in
+  let parser =
+    Parser.( !!action %(open_ method_n) %name_in
+                      %type_expr_in %(close method_n) )
   in
   parser input
 
@@ -608,7 +659,7 @@ let constructor_in =
 
 let type_kind_in =
   let abstract = None in
-  let variant (Open, _) cstrs Close = Some (Variant cstrs) in
+  let variant (Open, _) cstrs Close : type_decl option = Some (Variant cstrs) in
   let record (Open, _) fields Close = Some (Record fields) in
   let extensible (Open, _) Close = Some Extensible in
   let open Parser in
@@ -1065,6 +1116,18 @@ let label_out output = function
       data output s;
       close output default_n
 
+let variant_kind_out output = function
+  | Fixed ->
+      open_ output fixed_n;
+      close output fixed_n
+  | Closed names ->
+      open_ output closed_n;
+      list name_out output names;
+      close output closed_n
+  | Open ->
+      open_ output open_n;
+      close output open_n
+
 let rec type_expr_out output = function
   | Var v ->
       open_ output var_n;
@@ -1092,7 +1155,42 @@ let rec type_expr_out output = function
       type_path_out output path;
       list type_expr_out output typs;
       close output constr_n
+  | Variant {kind; elements} ->
+      open_ output variant_n;
+      variant_kind_out output kind;
+      list variant_element_out output elements;
+      close output variant_n
+  | Object {methods; open_ = o} ->
+      let attrs =
+        [open_n, string_of_bool o]
+      in
+      open_ ~attrs output object_n;
+      list method_out output methods;
+      close output object_n
+  | Class(path, typs) ->
+      open_ output class_n;
+      type_path_out output path;
+      list type_expr_out output typs;
+      close output class_n
   | TYPE_EXPR_todo msg -> todo_out output msg
+
+and variant_element_out output = function
+  | Type(path, typs) ->
+      open_ output type_n;
+      type_path_out output path;
+      list type_expr_out output typs;
+      close output type_n
+  | Constructor(name, typs) ->
+      open_ output constructor_n;
+      name_out output name;
+      list (opt type_expr_out) output typs;
+      close output constructor_n
+
+and method_out output {name; type_} =
+  open_ output method_n;
+  name_out output name;
+  type_expr_out output type_;
+  close output method_n
 
 let val_out output ({name; doc; type_}: val_) =
   open_ output val_n;
@@ -1126,7 +1224,8 @@ let constructor_out output ({name; doc; args; ret;}: constructor) =
   opt ret_out output ret;
   close output constructor_n
 
-let type_kind_out output = function
+let type_kind_out output (tk : type_decl option) =
+  match tk with
   | None -> ()
   | Some (Variant cstrs) ->
       open_ output variant_n;

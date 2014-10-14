@@ -140,11 +140,35 @@ and type_expr =
   | Arrow of label option * type_expr * type_expr
   | Tuple of type_expr list
   | Constr of type_path * type_expr list
+  | Variant of variant
+  | Object of object_
+  | Class of type_path * type_expr list
   | TYPE_EXPR_todo of string
 
 and label =
   | Label of string
   | Default of string
+
+and variant =
+  { kind: variant_kind;
+    elements: variant_element list;}
+
+and variant_kind =
+  | Fixed
+  | Closed of string list
+  | Open
+
+and variant_element =
+  | Type of type_path * type_expr list
+  | Constructor of string * type_expr option list
+
+and object_ =
+  { methods: object_method list;
+    open_ : bool; }
+
+and object_method =
+  { name: string;
+    type_: type_expr; }
 
 (** {3 Paths} *)
 
