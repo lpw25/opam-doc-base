@@ -18,16 +18,58 @@ open OpamDocPath
 open Documentation
 open Asttypes
 open Parsetree
+open Types
 open Typedtree
 open OpamDocTypes
 
 module Name = OpamDocName
+
+let map_opt f = function
+  | None -> None
+  | Some x -> Some (f x)
+
+let iter_opt f = function
+  | None -> ()
+  | Some x -> f x
+
+let mark_type_parameter (ctyp, _) =
+  OpamDocCmi.mark_type_parameter ctyp.ctyp_type
+
+let mark_extension_constructor ext =
+  List.iter OpamDocCmi.mark_type ext.ext_type.ext_args;
+  iter_opt OpamDocCmi.mark_type ext.ext_type.ext_ret_type
+
+let read_type_parameter res (ctyp, _) =
+  OpamDocCmi.read_type_param res ctyp.ctyp_type
 
 let read_comment res : Parsetree.attribute -> doc option = function
   | ({txt = "comment"}, PDoc(d, _)) ->
       let info, tags = OpamDocCmi.read_documentation res d in
       Some {info; tags}
   | _ -> None
+
+let read_type_extension res tyext =
+  OpamDocCmi.reset_names ();
+  OpamDocCmi.reset_aliased ();
+  List.iter mark_type_parameter tyext.tyext_params;
+  List.iter mark_extension_constructor tyext.tyext_constructors;
+  let type_path =
+    match find_type res tyext.tyext_path with
+    | None -> Unknown (Path.name tyext.tyext_path)
+    | Some p -> Known p
+  in
+  let type_params = List.map (read_type_parameter res) tyext.tyext_params in
+  let doc = OpamDocCmi.read_attributes res tyext.tyext_attributes in
+  let private_ = (tyext.tyext_private = Private) in
+  let constructors =
+    List.map
+      (fun ext ->
+        OpamDocCmi.read_extension_constructor res ext.ext_id ext.ext_type)
+      tyext.tyext_constructors
+  in
+    { type_path; type_params;
+      doc; private_;
+      constructors; }
 
 let rec read_module_declaration res parent api md =
   match md.md_type.mty_desc with
@@ -101,9 +143,18 @@ and read_signature_item res parent api item : (signature_item * api) option =
           ) decls
       in
       Some (Types decls, api)
-  | Tsig_exception e ->
-      let e = OpamDocCmi.read_extension_constructor res e.ext_id e.ext_type in
-      Some (Exn e, api)
+  | Tsig_typext tyext ->
+      let tyext = read_type_extension res tyext in
+        Some (TypExt tyext, api)
+  | Tsig_exception ext ->
+      OpamDocCmi.reset_names ();
+      OpamDocCmi.reset_aliased ();
+      List.iter OpamDocCmi.mark_type_parameter ext.ext_type.ext_type_params;
+      mark_extension_constructor ext;
+      let constr =
+        OpamDocCmi.read_extension_constructor res ext.ext_id ext.ext_type
+      in
+        Some (Exn constr, api)
   | Tsig_module md ->
       let md, api = read_module_declaration res parent api md in
       Some (Modules [md], api)

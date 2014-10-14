@@ -57,7 +57,8 @@ and signature = signature_item list
 and signature_item =
   | Val of val_
   | Types of type_ list
-  | Exn of exn_
+  | TypExt of extension
+  | Exn of constructor
   | Modules of nested_module list
   | ModuleType of nested_module_type
   | Comment of doc
@@ -95,6 +96,7 @@ and type_ =
   { name: OpamDocName.Type.t;
     doc: doc;
     param: string list;
+    private_: bool;
     manifest: type_expr option;
     decl: type_decl option; }
 
@@ -113,6 +115,15 @@ and field =
   { name: OpamDocName.Field.t;
     doc: doc;
     type_: type_expr; }
+
+(** {3 Type extensions } *)
+
+and extension =
+  { type_path: type_path;
+    doc: doc;
+    type_params: string list;
+    private_: bool;
+    constructors: constructor list; }
 
 (** {3 Values} *)
 
@@ -134,14 +145,6 @@ and type_expr =
 and label =
   | Label of string
   | Default of string
-
-(** {3 Exceptions} *)
-
-and exn_ =
-  { name: OpamDocName.Exn.t;
-    doc: doc;
-    args: type_expr list;
-    ret: type_expr option; }
 
 (** {3 Paths} *)
 

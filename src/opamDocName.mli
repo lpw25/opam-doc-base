@@ -21,5 +21,3 @@ module Value : Name
 module Constructor : Name
 
 module Field : Name
-
-module Exn : Name

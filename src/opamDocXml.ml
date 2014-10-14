@@ -38,6 +38,7 @@ let alias_n: Xmlm.name = ("","alias")
 let type_n: Xmlm.name = ("","type")
 let types_n: Xmlm.name = ("","types")
 let param_n: Xmlm.name = ("","param")
+let private_n: Xmlm.name = ("","private")
 let manifest_n: Xmlm.name = ("","manifest")
 let variant_n: Xmlm.name = ("","variant")
 let record_n: Xmlm.name = ("","record")
@@ -46,6 +47,8 @@ let constructor_n: Xmlm.name = ("","constructor")
 let field_n: Xmlm.name = ("","field")
 let arg_n: Xmlm.name = ("","arg")
 let return_n: Xmlm.name = ("","return")
+
+let extension_n: Xmlm.name =("","extension")
 
 let val_n: Xmlm.name = ("","val")
 let exn_n: Xmlm.name = ("","exn")
@@ -137,6 +140,8 @@ module Parser : sig
   val (!!): 'a -> 'a t
 
   val opt: 'a t -> 'a option t
+
+  val flag: Xmlm.name -> bool t
 
   val list: 'a t -> 'a list t
 
@@ -241,6 +246,10 @@ end = struct
   let none = None
   let some x = Some x
   let opt p = !!none @@ !!some %p
+
+  let on (Open, _) Close = true
+  let off = false
+  let flag n = !!on %(open_ n) %(close n) @@ !!off
 
   let nil = []
   let cons hd tl = hd :: tl
@@ -597,14 +606,6 @@ let constructor_in =
   !!action %(open_ constructor_n) %name_in %doc_in %(list arg_in) %(opt ret_in)
   %(close constructor_n)
 
-let exn_in =
-  let action (Open, _) name doc args ret Close: exn_ =
-    {name = Name.Exn.of_string name; doc; args; ret}
-  in
-  let open Parser in
-  !!action %(open_ exn_n) %name_in %doc_in %(list arg_in) %(opt ret_in)
-  %(close exn_n)
-
 let type_kind_in =
   let abstract = None in
   let variant (Open, _) cstrs Close = Some (Variant cstrs) in
@@ -625,12 +626,20 @@ let param_in =
   Parser.( !!action %(open_ param_n) %data %(close param_n) )
 
 let type_decl_in =
-  let action (Open, _) name doc param manifest decl Close =
-    {name = Name.Type.of_string name; doc; param; manifest; decl}
+  let action (Open, _) name doc param private_ manifest decl Close =
+    {name = Name.Type.of_string name; doc; param; private_; manifest; decl}
   in
   let open Parser in
-  !!action %(open_ type_n) %name_in %doc_in %(list param_in) %(opt manifest_in)
-  %type_kind_in %(close type_n)
+  !!action %(open_ type_n) %name_in %doc_in %(list param_in) %(flag private_n)
+           %(opt manifest_in) %type_kind_in %(close type_n)
+
+let type_ext_in =
+  let action (Open, _) type_path doc type_params private_ constructors Close =
+    {type_path; doc; type_params; private_; constructors}
+  in
+  let open Parser in
+  !!action %(open_ extension_n) %type_path_in %doc_in %(list param_in) %(flag private_n)
+  %(list constructor_in) %(close extension_n)
 
 let nested_module_type_in =
   let action (Open, _) name doc desc Close =
@@ -667,7 +676,8 @@ let nested_module_in =
 let signature_item_in =
   let val_ v : signature_item = Val v in
   let type_ t = Types [t] in
-  let exn_ e = Exn e in
+  let ext ext = TypExt ext in
+  let exn_ (Open, _) constr Close = Exn constr in
   let types (Open, _) ts Close = Types ts in
   let module_ md = Modules [md] in
   let modules (Open, _) mds Close = Modules mds in
@@ -678,7 +688,8 @@ let signature_item_in =
   !!val_ %val_in
   @@ !!type_ %type_decl_in
   @@ !!types %(open_ types_n) %(seq type_decl_in) %(close types_n)
-  @@ !!exn_ %exn_in
+  @@ !!ext %type_ext_in
+  @@ !!exn_ %(open_ exn_n) %constructor_in %(close exn_n)
   @@ !!module_ %nested_module_in
   @@ !!modules %(open_ modules_n) %(seq nested_module_in) %(close modules_n)
   @@ !!module_type %nested_module_type_in
@@ -759,6 +770,12 @@ let opt p output o =
   match o with
   | None -> ()
   | Some x -> p output x
+
+let flag n output b =
+  if b then begin
+    open_ output n;
+    close output n
+  end
 
 let rec list p output l =
   match l with
@@ -1109,14 +1126,6 @@ let constructor_out output ({name; doc; args; ret;}: constructor) =
   opt ret_out output ret;
   close output constructor_n
 
-let exn_out output ({name; doc; args; ret}: exn_) =
-  open_ output exn_n;
-  name_out output (Name.Exn.to_string name);
-  doc_out output doc;
-  list arg_out output args;
-  opt ret_out output ret;
-  close output exn_n
-
 let type_kind_out output = function
   | None -> ()
   | Some (Variant cstrs) ->
@@ -1141,14 +1150,24 @@ let param_out output v =
   data output v;
   close output param_n
 
-let type_decl_out output {name; doc; param; manifest; decl} =
+let type_decl_out output {name; doc; param; private_; manifest; decl} =
   open_ output type_n;
   name_out output (Name.Type.to_string name);
   doc_out output doc;
   list param_out output param;
+  flag private_n output private_;
   opt manifest_out output manifest;
   type_kind_out output decl;
   close output type_n
+
+let type_ext_out output {type_path; doc; type_params; private_; constructors} =
+  open_ output extension_n;
+  type_path_out output type_path;
+  doc_out output doc;
+  list param_out output type_params;
+  flag private_n output private_;
+  list constructor_out output constructors;
+  close output extension_n
 
 let nested_module_type_out output {name; doc; desc} =
   let module_type_desc_out output = function
@@ -1190,7 +1209,11 @@ let signature_item_out output : signature_item -> unit = function
       open_ output types_n;
       list type_decl_out output ts;
       close output types_n
-  | Exn e -> exn_out output e
+  | TypExt ext -> type_ext_out output ext
+  | Exn constr ->
+      open_ output exn_n;
+      constructor_out output constr;
+      close output exn_n
   | Modules [md] -> nested_module_out output md
   | Modules mds ->
       open_ output modules_n;

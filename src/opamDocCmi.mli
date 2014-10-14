@@ -14,6 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+val mark_type: Types.type_expr -> unit
+
+val mark_type_parameter: Types.type_expr -> unit
+
+val reset_names: unit -> unit
+
+val reset_aliased: unit -> unit
+
 val read_interface: OpamDocPath.resolver -> OpamDocPath.Module.t ->
   Types.signature -> OpamDocTypes.api
 
@@ -33,7 +41,12 @@ val read_value_description: OpamDocPath.resolver -> Ident.t ->
   Types.value_description -> OpamDocTypes.val_
 
 val read_extension_constructor: OpamDocPath.resolver -> Ident.t ->
-  Types.extension_constructor -> OpamDocTypes.exn_
+  Types.extension_constructor -> OpamDocTypes.constructor
+
+val read_type_expr: OpamDocPath.resolver -> Types.type_expr ->
+  OpamDocTypes.type_expr
+
+val read_type_param: OpamDocPath.resolver -> Types.type_expr -> string
 
 val read_attributes: OpamDocPath.resolver -> Parsetree.attributes ->
   OpamDocTypes.doc
