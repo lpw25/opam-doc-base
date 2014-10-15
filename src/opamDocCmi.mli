@@ -15,16 +15,14 @@
  *)
 
 val read_interface: OpamDocPath.resolver -> OpamDocPath.Module.t ->
-  Types.signature -> OpamDocTypes.api
+  Types.signature -> OpamDocTypes.module_
 
 (* TODO remove these from the interface when OpamDocCmti is finished *)
 val read_module_declaration: OpamDocPath.resolver -> OpamDocPath.parent ->
-  OpamDocTypes.api -> Ident.t -> Types.module_declaration ->
-  OpamDocTypes.nested_module * OpamDocTypes.api
+  Ident.t -> Types.module_declaration -> OpamDocTypes.module_
 
 val read_modtype_declaration: OpamDocPath.resolver -> OpamDocPath.parent ->
-  OpamDocTypes.api -> Ident.t -> Types.modtype_declaration ->
-  OpamDocTypes.nested_module_type * OpamDocTypes.api
+  Ident.t -> Types.modtype_declaration -> OpamDocTypes.module_type
 
 val read_type_declaration: OpamDocPath.resolver -> Ident.t ->
   Types.type_declaration -> OpamDocTypes.type_

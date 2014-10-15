@@ -334,11 +334,10 @@ let read_type_declaration res id (decl : Types.type_declaration) =
     manifest = map_opt (read_type_expr res) decl.type_manifest;
     decl = read_type_kind res decl.type_kind; }
 
-let rec read_module_declaration res parent api id (md : Types.module_declaration) =
+let rec read_module_declaration res parent id (md : Types.module_declaration) =
   let name = Name.Module.of_string (Ident.name id) in
   let path = Module.create parent name in
   let doc = read_attributes res md.md_attributes in
-  let (desc : nested_module_desc), api =
     match md.md_type with
     | Mty_ident p ->
         let p : module_type_path =
@@ -346,95 +345,53 @@ let rec read_module_declaration res parent api id (md : Types.module_declaration
           | None -> Unknown (Path.name p)
           | Some p -> Known p
         in
-        let modl : module_ =
           { path = path; doc; alias = None;
             type_path = Some p; type_ = None }
-        in
-        let api =
-          { api with modules = Module.Map.add path modl api.modules }
-        in
-        Type (Path p), api
     | Mty_signature sg ->
         let parent : parent = Module path in
-        let sg, api = read_signature res parent api [] sg in
-        let modl : module_ =
+        let sg = read_signature res parent [] sg in
           { path = path; doc; alias = None;
             type_path = None; type_ = Some sg }
-        in
-        let api =
-          { api with modules = Module.Map.add path modl api.modules }
-        in
-        Type Signature, api
-    | Mty_functor _ -> MODULE_todo ("functor:"^Module.to_string path), api
+    | Mty_functor _ ->
+        let sg = MODULE_TYPE_EXPR_todo ("functor:"^Module.to_string path) in
+        { path = path; doc; alias = None;
+          type_path = None; type_ = Some sg }
     | Mty_alias p ->
         let p : module_path =
           match find_module res p with
           | None -> Unknown (Path.name p)
           | Some p -> Known p
         in
-        let modl : module_ =
           { path = path; doc; alias = Some p;
             type_path = None; type_ = None }
-        in
-        let api =
-          { api with modules = Module.Map.add path modl api.modules }
-        in
-        Alias p, api
-  in
-  let md : nested_module = { name; doc; desc } in
-  md, api
 
-and read_modtype_declaration res parent api id
+and read_modtype_declaration res parent id
                              (mtd : Types.modtype_declaration) =
   let name = Name.ModuleType.of_string (Ident.name id) in
   let path = ModuleType.create parent name in
   let doc = read_attributes res mtd.mtd_attributes in
-  let desc, api =
     match mtd.mtd_type with
     | None ->
-        let mty =
-          { path = path; doc; alias = None; expr = None; }
-        in
-        let api =
-          { api with
-            module_types = ModuleType.Map.add path mty api.module_types }
-        in
-        Abstract, api
+        { path = path; doc; alias = None; expr = None; }
     | Some (Mty_ident p) ->
         let p : module_type_path =
           match find_module_type res p with
           | None -> Unknown (Path.name p)
           | Some p -> Known p
         in
-        let mty =
           { path = path; doc; alias = Some p; expr = None; }
-        in
-        let api =
-          { api with
-            module_types = ModuleType.Map.add path mty api.module_types }
-        in
-        Manifest (Path p), api
     | Some (Mty_signature sg) ->
-        let sg, api = read_signature res (ModType path) api [] sg in
-        let mty =
+        let sg = read_signature res (ModType path) [] sg in
           { path = path; doc; alias = None; expr = Some sg; }
-        in
-        let api =
-          { api with
-            module_types = ModuleType.Map.add path mty api.module_types }
-        in
-        Manifest Signature, api
     | Some (Mty_functor _) ->
-        MODULE_TYPE_todo ("functor:"^ModuleType.to_string path), api
+        let sg = MODULE_TYPE_EXPR_todo ("functor:"^ModuleType.to_string path) in
+          { path = path; doc; alias = None; expr = Some sg; }
     | Some (Mty_alias _) -> assert false
-  in
-  let mtd = { name; doc; desc = desc; } in
-  mtd, api
 
-and read_signature res parent api (acc : signature) = function
+and read_signature res parent (acc : signature) = function
   | Sig_value(id, v) :: rest ->
       let v = read_value_description res id v in
-      read_signature res parent api ((Val v) :: acc) rest
+      read_signature res parent ((Val v) :: acc) rest
   | Sig_type(id, decl, Trec_first) :: rest ->
       let decl = read_type_declaration res id decl in
       let rec loop acc' = function
@@ -442,44 +399,37 @@ and read_signature res parent api (acc : signature) = function
             let decl = read_type_declaration res id decl in
             loop (decl :: acc') rest
         | rest ->
-            read_signature res parent api (Types(List.rev acc') :: acc) rest
+            read_signature res parent (Types(List.rev acc') :: acc) rest
       in
       loop [decl] rest
   | Sig_type(id, decl, _) :: rest ->
       let decl = read_type_declaration res id decl in
-      read_signature res parent api ((Types [decl]) ::  acc) rest
+      read_signature res parent ((Types [decl]) ::  acc) rest
   | Sig_typext (id, v, Text_exception) :: rest ->
       let decl = read_extension_constructor res id v in
-      read_signature res parent api ((Exn decl) :: acc) rest
+      read_signature res parent ((Exn decl) :: acc) rest
   | Sig_module(id, md, Trec_first) :: rest ->
-      let md, api = read_module_declaration res parent api id md in
-      let rec loop api acc' = function
+      let md = read_module_declaration res parent id md in
+      let rec loop acc' = function
         | Sig_module(id, md, Trec_next) :: rest ->
-            let md, api = read_module_declaration res parent api id md in
-            loop api (md :: acc') rest
+            let md = read_module_declaration res parent id md in
+            loop (md :: acc') rest
         | rest ->
-            read_signature res parent api (Modules(List.rev acc') :: acc) rest
+            read_signature res parent (Modules(List.rev acc') :: acc) rest
       in
-      loop api [md] rest
+      loop [md] rest
   | Sig_module(id, md, _) :: rest ->
-      let md, api = read_module_declaration res parent api id md in
-      read_signature res parent api ((Modules [md]) :: acc) rest
+      let md = read_module_declaration res parent id md in
+      read_signature res parent ((Modules [md]) :: acc) rest
   | Sig_modtype(id, mtd) :: rest ->
-      let mtd, api = read_modtype_declaration res parent api id mtd in
-      read_signature res parent api ((ModuleType mtd) :: acc) rest
+      let mtd = read_modtype_declaration res parent id mtd in
+      read_signature res parent ((ModuleType mtd) :: acc) rest
   | x :: rest ->
-      read_signature res parent api
+      read_signature res parent
         (SIG_todo (parent_to_string parent) :: acc) rest
-  | [] -> Signature (List.rev acc), api
+  | [] -> Signature (List.rev acc)
 
 let read_interface res path intf =
-  let api =
-    { modules = Module.Map.empty;
-      module_types = ModuleType.Map.empty }
-  in
-  let sg, api = read_signature res (Module path) api [] intf in
-  let modl =
+  let sg = read_signature res (Module path) [] intf in
     { path = path; doc = {info = []; tags = []; }; alias = None;
       type_path = None; type_ = Some sg }
-  in
-  { api with modules = Module.Map.add path modl api.modules }

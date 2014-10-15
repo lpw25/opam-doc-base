@@ -20,12 +20,7 @@ val load_state: OpamState.state -> OpamUnitsState.state -> state
 
 val modules: state -> OpamDocPath.Module.Set.t
 
-val module_types: state -> OpamDocPath.ModuleType.Set.t
-
 val load_module: state -> OpamDocPath.Module.t -> OpamDocTypes.module_
-
-val load_module_type: state -> OpamDocPath.ModuleType.t ->
-  OpamDocTypes.module_type
 
 val load_library: state -> OpamDocPath.Library.t -> OpamDocTypes.library
 

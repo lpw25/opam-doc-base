@@ -29,23 +29,16 @@ let read_comment res : Parsetree.attribute -> doc option = function
       Some {info; tags}
   | _ -> None
 
-let rec read_module_declaration res parent api md =
+let rec read_module_declaration res parent md =
   match md.md_type.mty_desc with
   | Tmty_signature sg ->
       let name = Name.Module.of_string (Ident.name md.md_id) in
       let path = Module.create parent name in
       let doc = OpamDocCmi.read_attributes res md.md_attributes in
       let parent : parent = Module path in
-      let sg, api = read_signature res parent api sg in
-      let modl =
+      let sg = read_signature res parent sg in
         { path = path; doc; alias = None;
           type_path = None; type_ = Some sg }
-      in
-      let api =
-        { api with modules = Module.Map.add path modl api.modules }
-      in
-      let md : nested_module = { name; doc; desc = Type Signature } in
-      md, api
   | _ ->
       let id = md.md_id in
       let md =
@@ -53,30 +46,17 @@ let rec read_module_declaration res parent api md =
           md_attributes = md.md_attributes;
           md_loc = md.md_loc; }
       in
-      OpamDocCmi.read_module_declaration res parent api id md
+      OpamDocCmi.read_module_declaration res parent id md
 
-and read_modtype_declaration res parent api mtd =
+and read_modtype_declaration res parent mtd =
   match mtd.mtd_type with
   | Some {mty_desc = Tmty_signature sg} ->
       let name = Name.ModuleType.of_string (Ident.name mtd.mtd_id) in
       let path = ModuleType.create parent name in
       let doc = OpamDocCmi.read_attributes res mtd.mtd_attributes in
       let parent : parent = ModType path in
-      (* TODO use correct path when paths can include parent module types *)
-      let sg, api = read_signature res parent api sg in
-      let mty =
+      let sg = read_signature res parent sg in
         { path = path; doc; alias = None; expr = Some sg; }
-      in
-      let api =
-        { api with
-          module_types = ModuleType.Map.add path mty api.module_types }
-      in
-      let mtd =
-        { name;
-          doc = OpamDocCmi.read_attributes res mtd.mtd_attributes;
-          desc = Manifest Signature; }
-      in
-      mtd, api
   | _ ->
       let id = mtd.mtd_id in
       let mtd =
@@ -87,69 +67,63 @@ and read_modtype_declaration res parent api mtd =
           mtd_attributes = mtd.mtd_attributes;
           mtd_loc = mtd.mtd_loc; }
       in
-      OpamDocCmi.read_modtype_declaration res parent api id mtd
+      OpamDocCmi.read_modtype_declaration res parent id mtd
 
-and read_signature_item res parent api item : (signature_item * api) option =
+and read_signature_item res parent item : signature_item option =
   match item.sig_desc with
   | Tsig_value vd ->
       let v = OpamDocCmi.read_value_description res vd.val_id vd.val_val in
-      Some (Val v, api)
+      Some (Val v)
   | Tsig_type decls ->
       let decls =
         List.map (fun decl ->
             OpamDocCmi.read_type_declaration res decl.typ_id decl.typ_type
           ) decls
       in
-      Some (Types decls, api)
+      Some (Types decls)
   | Tsig_exception e ->
       let e = OpamDocCmi.read_extension_constructor res e.ext_id e.ext_type in
-      Some (Exn e, api)
+      Some (Exn e)
   | Tsig_module md ->
-      let md, api = read_module_declaration res parent api md in
-      Some (Modules [md], api)
+      let md = read_module_declaration res parent md in
+      Some (Modules [md])
   | Tsig_recmodule mds ->
-      let mds, api =
+      let mds =
         List.fold_left
-          (fun (mds, api) md ->
-             let md, api = read_module_declaration res parent api md in
-             (md :: mds), api)
-          ([], api) mds
+          (fun mds md ->
+             let md = read_module_declaration res parent md in
+             (md :: mds))
+          [] mds
       in
-      Some (Modules (List.rev mds), api)
+      Some (Modules (List.rev mds))
   | Tsig_modtype mtd ->
-      let mtd, api = read_modtype_declaration res parent api mtd in
-      Some (ModuleType mtd, api)
+      let mtd = read_modtype_declaration res parent mtd in
+      Some (ModuleType mtd)
   | Tsig_attribute attr -> begin
       match read_comment res attr with
       | None -> None
-      | Some doc -> Some (Comment doc, api)
+      | Some doc -> Some (Comment doc)
     end
-  | _ -> Some (SIG_todo (parent_to_string parent), api)
+  | _ -> Some (SIG_todo (parent_to_string parent))
 
-and read_signature res parent api sg =
-  let items, api =
+and read_signature res parent sg =
+  let items =
     List.fold_left
-      (fun (items, api) item ->
-         match read_signature_item res parent api item with
-         | None -> (items, api)
-         | Some (item, api) -> (item :: items, api))
-      ([], api) sg.sig_items
+      (fun items item ->
+         match read_signature_item res parent item with
+         | None -> items
+         | Some item -> item :: items)
+      [] sg.sig_items
   in
-  Signature (List.rev items), api
+  Signature (List.rev items)
 
 let read_interface_tree res path intf =
-  let api =
-    { modules = Module.Map.empty;
-      module_types = ModuleType.Map.empty }
-  in
-  let sg, api = read_signature res (Module path) api intf in
+  let sg = read_signature res (Module path) intf in
   let doc, (sg : module_type_expr) =
     match sg with
     | Signature (Comment doc :: items) -> doc, Signature items
     | Signature items -> {info = []; tags = []}, Signature items
+    | _ -> assert false
   in
-  let modl =
     { path = path; doc; alias = None;
       type_path = None; type_ = Some sg }
-  in
-  { api with modules = Module.Map.add path modl api.modules }
