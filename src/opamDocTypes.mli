@@ -51,6 +51,7 @@ and module_type =
 
 and module_type_expr =
   | Signature of signature
+  | MODULE_TYPE_EXPR_todo of string
 
 and signature = signature_item list
 
@@ -59,36 +60,10 @@ and signature_item =
   | Types of type_ list
   | TypExt of extension
   | Exn of constructor
-  | Modules of nested_module list
-  | ModuleType of nested_module_type
+  | Modules of module_ list
+  | ModuleType of module_type
   | Comment of doc
   | SIG_todo of string
-
-(** {3 Nested modules} *)
-
-and nested_module =
-  { name: OpamDocName.Module.t;
-    doc: doc;
-    desc: nested_module_desc; }
-
-and nested_module_desc =
-  | Alias of module_path
-  | Type of nested_module_type_expr
-  | MODULE_todo of string
-
-and nested_module_type =
-  { name: OpamDocName.ModuleType.t;
-    doc: doc;
-    desc: nested_module_type_desc; }
-
-and nested_module_type_desc =
-  | Manifest of nested_module_type_expr
-  | Abstract
-  | MODULE_TYPE_todo of string
-
-and nested_module_type_expr =
-  | Signature
-  | Path of module_type_path
 
 (** {3 Types} *)
 

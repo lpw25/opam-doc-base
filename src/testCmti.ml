@@ -31,8 +31,7 @@ let test cmti =
     | Cmt_format.Interface sg -> sg
     | _ -> failwith "Not a cmti file"
   in
-  let api = OpamDocCmti.read_interface_tree res md tree in
-  let intf = Module.Map.find md api.modules in
+  let intf = OpamDocCmti.read_interface_tree res md tree in
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
   let () = OpamDocXml.module_to_xml output intf in

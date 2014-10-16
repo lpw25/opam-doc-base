@@ -24,7 +24,6 @@ type state =
   { timestamp: float;
     unit_timestamp: float OpamUnit.Map.t;
     modules: Module.Set.t;
-    module_types: ModuleType.Set.t;
     root: OpamFilename.Dir.t; }
 
 let read_state file =
@@ -127,18 +126,6 @@ let library_file r lib =
   let lib_dir = library_directory r lib in
   OpamFilename.OP.(lib_dir // OpamDocBaseConfig.lib_idx_name)
 
-let rec parent_prefix r p acc =
-  match p with
-  | Lib lib -> acc
-  | Module md ->
-      let name = (Name.Module.to_string (Module.name md)) in
-      let acc = name ^ "." ^ acc in
-        parent_prefix r (Module.parent md) acc
-  | ModType mty ->
-      let name = (Name.ModuleType.to_string (ModuleType.name mty)) in
-      let acc = name ^ ":" ^ acc in
-        parent_prefix r (ModuleType.parent mty) acc
-
 let modules_directory r lib =
   let lib_dir = library_directory r lib in
   let dir =
@@ -147,41 +134,19 @@ let modules_directory r lib =
   if not (OpamFilename.exists_dir dir) then OpamFilename.mkdir dir;
   dir
 
-let module_file r md =
-  let mod_dir = modules_directory r (Module.library md) in
-  let name = (Name.Module.to_string (Module.name md)) in
-  let mod_str = parent_prefix r (Module.parent md) (name ^ ".xml") in
+let module_file r lib name =
+  let mod_dir = modules_directory r lib in
+  let name = Name.Module.to_string name in
+  let mod_str = name ^ ".xml" in
   OpamFilename.OP.(mod_dir // mod_str)
 
-let module_types_directory r lib =
-  let lib_dir = library_directory r lib in
-  let dir =
-    OpamFilename.OP.(lib_dir / OpamDocBaseConfig.module_types_dir_name)
-  in
-  if not (OpamFilename.exists_dir dir) then OpamFilename.mkdir dir;
-  dir
-
-let module_type_file r mty =
-  let mty_dir = module_types_directory r (ModuleType.library mty) in
-  let name = (Name.ModuleType.to_string (ModuleType.name mty)) in
-  let mty_str = parent_prefix r (ModuleType.parent mty) (name ^ ".xml") in
-  OpamFilename.OP.(mty_dir // mty_str)
-
-let read_module r path =
-  let file = module_file r path in
+let read_module r lib name =
+  let file = module_file r lib name in
   read_xml OpamDocXml.module_of_xml file
 
-let write_module r path md =
-  let file = module_file r path in
+let write_module r lib name md =
+  let file = module_file r lib name in
   write_xml OpamDocXml.module_to_xml file md
-
-let read_module_type r path =
-  let file = module_type_file r path in
-  read_xml OpamDocXml.module_type_of_xml file
-
-let write_module_type r path mty =
-  let file = module_type_file r path in
-  write_xml OpamDocXml.module_type_to_xml file mty
 
 let read_library r path =
   let file = library_file r path in
@@ -266,42 +231,34 @@ let resolve_name import_graph unit =
   in
   resolve
 
-let add_module path md r =
-  write_module r path md;
-  { r with modules = Module.Set.add path r.modules }
-
-let add_module_type path md r =
-  write_module_type r path md;
-  { r with module_types = ModuleType.Set.add path r.module_types }
-
 let add_unit import_graph s unit r =
   let name =
     Name.Module.of_string (OpamUnit.Name.to_string (OpamUnit.name unit))
   in
   let lib = OpamUnit.library unit in
   let md = Module.create (Lib lib) name in
+  let r = { r with modules = Module.Set.add md r.modules } in
   let res = resolve_name import_graph unit in
   let cmi_file = OpamUnit.Map.find unit (OpamUnitsState.unit_file s) in
   let cmti_file =
     OpamFilename.add_extension (OpamFilename.chop_extension cmi_file) "cmti"
   in
-  let api, timestamp =
+  let modl, timestamp =
     if OpamFilename.exists cmti_file then begin
       let stats = Unix.stat (OpamFilename.to_string cmti_file) in
       let timestamp = stats.Unix.st_mtime in
       let sg = read_cmti cmti_file in
-      let api = OpamDocCmti.read_interface_tree res md sg in
-      api, timestamp
+      let modl = OpamDocCmti.read_interface_tree res md sg in
+      modl, timestamp
     end else begin
       let stats = Unix.stat (OpamFilename.to_string cmi_file) in
       let timestamp = stats.Unix.st_mtime in
       let sg = read_cmi cmi_file in
-      let api = OpamDocCmi.read_interface res md sg in
-      api, timestamp
+      let modl = OpamDocCmi.read_interface res md sg in
+      modl, timestamp
     end
   in
-  let r = Module.Map.fold add_module api.modules r in
-  let r = ModuleType.Map.fold add_module_type api.module_types r in
+  write_module r lib name modl;
   let unit_timestamp = OpamUnit.Map.add unit timestamp r.unit_timestamp in
   { r with unit_timestamp }
 
@@ -367,8 +324,7 @@ let init_state (t : OpamState.state) s =
     { timestamp = 0.0;
       root = OpamFilename.OP.(share_dir / OpamDocBaseConfig.root_name);
       unit_timestamp = OpamUnit.Map.empty;
-      modules = Module.Set.empty;
-      module_types = ModuleType.Set.empty;}
+      modules = Module.Set.empty;}
   in
   let r = init_units s r in
   let r = init_libraries s r in
@@ -381,11 +337,10 @@ let load_state t s = init_state t s
 
 let modules s = s.modules
 
-let module_types s = s.module_types
-
-let load_module r md = read_module r md
-
-let load_module_type r mty = read_module_type r mty
+let load_module r md =
+  match Module.parent md with
+  | Lib l -> read_module r l (Module.name md)
+  | _ -> raise (Invalid_argument "load_module")
 
 let load_library r lib = read_library r lib
 

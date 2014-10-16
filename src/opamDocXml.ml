@@ -699,39 +699,7 @@ let type_ext_in =
   !!action %(open_ extension_n) %type_path_in %doc_in %(list param_in) %(flag private_n)
   %(list constructor_in) %(close extension_n)
 
-let nested_module_type_in =
-  let action (Open, _) name doc desc Close =
-    {name = Name.ModuleType.of_string name; doc; desc}
-  in
-  let abstract = Abstract in
-  let path path = Manifest (Path path) in
-  let sign (Open, _) Close = Manifest Signature in
-  let todo (Open, _) msg Close = MODULE_TYPE_todo msg in
-  let open Parser in
-  !!action %(open_ module_type_n) %name_in %doc_in %(
-    !!abstract
-    @@ !!path %module_type_path_in
-    @@ !!sign %(open_ signature_n) %(close signature_n)
-    @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
-  ) %(close module_type_n)
-
-let nested_module_in =
-  let action (Open, _) name doc desc Close : nested_module =
-    {name = Name.Module.of_string name; doc; desc}
-  in
-  let alias (Open, _) path Close : nested_module_desc= Alias path in
-  let path path : nested_module_desc = Type (Path path) in
-  let sign (Open, _) Close : nested_module_desc = Type Signature in
-  let todo (Open, _) msg Close = MODULE_todo msg in
-  let open Parser in
-  !!action %(open_ module_n) %name_in %doc_in %(
-    !!alias %(open_ alias_n) %module_path_in %(close alias_n)
-    @@ !!path %module_type_path_in
-    @@ !!sign %(open_ signature_n) %(close signature_n)
-    @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
-  ) %(close module_n)
-
-let signature_item_in =
+let rec signature_item_in input =
   let val_ v : signature_item = Val v in
   let type_ t = Types [t] in
   let ext ext = TypExt ext in
@@ -743,44 +711,61 @@ let signature_item_in =
   let comment (Open, _) info tags Close = Comment {info; tags} in
   let todo (Open, _) msg Close = SIG_todo msg in
   let open Parser in
-  !!val_ %val_in
-  @@ !!type_ %type_decl_in
-  @@ !!types %(open_ types_n) %(seq type_decl_in) %(close types_n)
-  @@ !!ext %type_ext_in
-  @@ !!exn_ %(open_ exn_n) %constructor_in %(close exn_n)
-  @@ !!module_ %nested_module_in
-  @@ !!modules %(open_ modules_n) %(seq nested_module_in) %(close modules_n)
-  @@ !!module_type %nested_module_type_in
-  @@ !!comment %(open_ comment_n) %text_in %tags_in %(close comment_n)
-  @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
+  let parser =
+    !!val_ %val_in
+    @@ !!type_ %type_decl_in
+    @@ !!types %(open_ types_n) %(seq type_decl_in) %(close types_n)
+    @@ !!ext %type_ext_in
+    @@ !!exn_ %(open_ exn_n) %constructor_in %(close exn_n)
+    @@ !!module_ %module_in
+    @@ !!modules %(open_ modules_n) %(seq module_in) %(close modules_n)
+    @@ !!module_type %module_type_in
+    @@ !!comment %(open_ comment_n) %text_in %tags_in %(close comment_n)
+    @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
+  in
+    parser input
 
-let module_type_expr_in =
-  let action (Open, _) sg Close : module_type_expr = Signature sg in
+and module_type_expr_in input =
+  let sg (Open, _) sg Close : module_type_expr = Signature sg in
+  let todo (Open, _) msg Close = MODULE_TYPE_EXPR_todo msg in
   let open Parser in
-  !!action %(open_ signature_n) %(list signature_item_in) %(close signature_n)
+  let parser =
+    !!sg %(open_ signature_n) %(list signature_item_in) %(close signature_n)
+    @@ !!todo %(open_ todo_n) %string_in %(close todo_n)
+  in
+    parser input
 
-let module_alias_in =
+and module_alias_in input =
   let action (Open, _) path Close = path in
   let open Parser in
-  !!action %(open_ alias_n) %module_path_in %(close alias_n)
+  let parser =
+    !!action %(open_ alias_n) %module_path_in %(close alias_n)
+  in
+    parser input
 
-let module_type_in =
+and module_type_in input =
   let action (Open, _) (Open, _) path Close doc alias expr Close =
     { path; doc; alias; expr; }
   in
   let open Parser in
-  !!action %(open_ module_type_n) %(open_ path_n) %module_type_t_in
-  %(close path_n) %doc_in %(opt module_type_path_in) %(opt module_type_expr_in)
-  %(close module_type_n)
+  let parser =
+    !!action %(open_ module_type_n) %(open_ path_n) %module_type_t_in
+    %(close path_n) %doc_in %(opt module_type_path_in) %(opt module_type_expr_in)
+    %(close module_type_n)
+  in
+    parser input
 
-let module_in =
+and module_in input =
   let action (Open, _) (Open, _) path Close doc alias type_path type_ Close =
     { path; doc; alias; type_path; type_; }
   in
   let open Parser in
-  !!action %(open_ module_n) %(open_ path_n) %module_t_in %(close path_n)
-  %doc_in %(opt module_alias_in) %(opt module_type_path_in)
-  %(opt module_type_expr_in) %(close module_n)
+  let parser =
+    !!action %(open_ module_n) %(open_ path_n) %module_t_in %(close path_n)
+    %doc_in %(opt module_alias_in) %(opt module_type_path_in)
+    %(opt module_type_expr_in) %(close module_n)
+  in
+    parser input
 
 let library_in =
   let action (Open, _) path modules Close = { path; modules; } in
@@ -1282,40 +1267,7 @@ let type_ext_out output {type_path; doc; type_params; private_; constructors} =
   list constructor_out output constructors;
   close output extension_n
 
-let nested_module_type_out output {name; doc; desc} =
-  let module_type_desc_out output = function
-    | Abstract -> ()
-    | Manifest (Path path) -> module_type_path_out output path
-    | Manifest Signature ->
-        open_ output signature_n;
-        close output signature_n
-    | MODULE_TYPE_todo msg -> todo_out output msg
-  in
-  open_ output module_type_n;
-  name_out output (Name.ModuleType.to_string name);
-  doc_out output doc;
-  module_type_desc_out output desc;
-  close output module_type_n
-
-let nested_module_out output ({name; doc; desc} : nested_module) =
-  let module_desc_out output : nested_module_desc -> unit = function
-    | Alias path ->
-        open_ output alias_n;
-        module_path_out output path;
-        close output alias_n
-    | Type (Path path) -> module_type_path_out output path
-    | Type Signature ->
-        open_ output signature_n;
-        close output signature_n
-    | MODULE_todo msg -> todo_out output msg
-  in
-  open_ output module_n;
-  name_out output (Name.Module.to_string name);
-  doc_out output doc;
-  module_desc_out output desc;
-  close output module_n
-
-let signature_item_out output : signature_item -> unit = function
+let rec signature_item_out output : signature_item -> unit = function
   | Val v -> val_out output v
   | Types [t] -> type_decl_out output t
   | Types ts ->
@@ -1327,12 +1279,12 @@ let signature_item_out output : signature_item -> unit = function
       open_ output exn_n;
       constructor_out output constr;
       close output exn_n
-  | Modules [md] -> nested_module_out output md
+  | Modules [md] -> module_out output md
   | Modules mds ->
       open_ output modules_n;
-      list nested_module_out output mds;
+      list module_out output mds;
       close output modules_n
-  | ModuleType mtd -> nested_module_type_out output mtd
+  | ModuleType mtd -> module_type_out output mtd
   | Comment {info; tags} ->
       open_ output comment_n;
       text_out output info;
@@ -1340,17 +1292,19 @@ let signature_item_out output : signature_item -> unit = function
       close output comment_n
   | SIG_todo msg -> todo_out output msg
 
-let module_type_expr_out output (Signature sg : module_type_expr) =
-  open_ output signature_n;
-  list signature_item_out output sg;
-  close output signature_n
+and module_type_expr_out output = function
+  | Signature sg ->
+      open_ output signature_n;
+      list signature_item_out output sg;
+      close output signature_n
+  | MODULE_TYPE_EXPR_todo msg -> todo_out output msg
 
-let module_alias_out output path =
+and module_alias_out output path =
   open_ output alias_n;
   module_path_out output path;
   close output alias_n
 
-let module_type_out output { path; doc; alias; expr; } =
+and module_type_out output { path; doc; alias; expr; } =
   open_ output module_type_n;
   open_ output path_n;
   module_type_t_out output path;
@@ -1360,7 +1314,7 @@ let module_type_out output { path; doc; alias; expr; } =
   opt module_type_expr_out output expr;
   close output module_type_n
 
-let module_out output { path; doc; alias; type_path; type_; } =
+and module_out output { path; doc; alias; type_path; type_; } =
   open_ output module_n;
   open_ output path_n;
   module_t_out output path;
