@@ -35,6 +35,8 @@ type parent =
 
 val parent_to_string : parent -> string
 
+val parent_list : parent -> parent list
+
 (** Modules *)
 module Module : sig
 
