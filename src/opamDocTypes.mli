@@ -136,7 +136,7 @@ and variant_kind =
 
 and variant_element =
   | Type of type_path * type_expr list
-  | Constructor of string * type_expr option list
+  | Constructor of string * bool * type_expr list
 
 and object_ =
   { methods: object_method list;
