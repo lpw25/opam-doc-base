@@ -384,14 +384,15 @@ and read_row res px row =
       List.filter (fun (_, f) -> Btype.row_field_repr f <> Rabsent)
         row.row_fields
     else row.row_fields in
+  let sorted_fields = List.sort (fun (p,_) (q,_) -> compare p q) fields in
   let present =
     List.filter
       (fun (_, f) ->
          match Btype.row_field_repr f with
          | Rpresent _ -> true
          | _ -> false)
-      fields in
-  let all_present = List.length present = List.length fields in
+      sorted_fields in
+  let all_present = List.length present = List.length sorted_fields in
   match row.row_name with
   | Some(p, typs) when namable_row row ->
       let p =
@@ -422,7 +423,7 @@ and read_row res px row =
                   in
                     Constructor(l, c, typs)
               | Rabsent -> assert false)
-          fields
+          sorted_fields
       in
       let kind =
         if all_present then
