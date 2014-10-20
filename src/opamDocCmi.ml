@@ -413,18 +413,14 @@ and read_row res px row =
           (fun (l, f) ->
             match Btype.row_field_repr f with
               | Rpresent None ->
-                  Constructor(l, [None])
+                  Constructor(l, true, [])
               | Rpresent (Some typ) ->
-                  Constructor(l, [Some (read_type_expr res typ)])
+                  Constructor(l, false, [read_type_expr res typ])
               | Reither(c, typs, _, _) ->
                   let typs =
-                    List.map (fun ty -> Some (read_type_expr res ty)) typs
+                    List.map (read_type_expr res) typs
                   in
-                  let typs =
-                    if c then None :: typs
-                    else typs
-                  in
-                    Constructor(l, typs)
+                    Constructor(l, c, typs)
               | Rabsent -> assert false)
           fields
       in

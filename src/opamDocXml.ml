@@ -69,6 +69,7 @@ let default_n: Xmlm.name = ("","default")
 let fixed_n: Xmlm.name = ("","fixed")
 let closed_n: Xmlm.name = ("","closed")
 let open_n: Xmlm.name = ("","open")
+let constant_n: Xmlm.name = ("","constant")
 
 let method_n: Xmlm.name = ("","method")
 
@@ -617,12 +618,12 @@ let rec type_expr_in input =
 
 and variant_element_in input =
   let type_ (Open, _) path typs Close : variant_element = Type(path, typs) in
-  let constructor (Open, _) name typs Close = Constructor(name, typs) in
+  let constructor (Open, _) name const typs Close = Constructor(name, const, typs) in
   let parser =
     Parser.( !!type_ %(open_ type_n) %type_path_in
                      %(list type_expr_in) %(close type_n)
-              @@ !!constructor %(open_ constructor_n) %name_in
-                     %(list (opt type_expr_in)) %(close constructor_n) )
+              @@ !!constructor %(open_ constructor_n) %name_in %(flag constant_n)
+                     %(list type_expr_in) %(close constructor_n) )
   in
   parser input
 
@@ -1179,10 +1180,11 @@ and variant_element_out output = function
       type_path_out output path;
       list type_expr_out output typs;
       close output type_n
-  | Constructor(name, typs) ->
+  | Constructor(name, const, typs) ->
       open_ output constructor_n;
       name_out output name;
-      list (opt type_expr_out) output typs;
+      flag constant_n output const;
+      list type_expr_out output typs;
       close output constructor_n
 
 and method_out output {name; type_} =

@@ -27,9 +27,20 @@ let test cmi =
   let intf = OpamDocCmi.read_interface res md cmi_info.Cmi_format.cmi_sign in
   let buf = Buffer.create 1024 in
   let output = Xmlm.make_output (`Buffer buf) in
-  let () = OpamDocXml.module_to_xml output intf in
+  OpamDocXml.module_to_xml output intf;
   Buffer.output_buffer stdout buf;
-  ()
+  print_newline ();
+  let input = Xmlm.make_input (`String(0, Buffer.contents buf)) in
+  let intf2 = OpamDocXml.module_of_xml {OpamDocXml.source = None; input} in
+  let buf2 = Buffer.create 1024 in
+  let output2 = Xmlm.make_output (`Buffer buf2) in
+  OpamDocXml.module_to_xml output2 intf2;
+  if buf <> buf2 then begin
+    prerr_endline "Error: parsing does not match printing";
+    Buffer.output_buffer stderr buf2;
+    prerr_newline ();
+    1
+  end else 0
 
 open Cmdliner
 
@@ -46,5 +57,6 @@ let () =
   try
     match Term.eval test with
       `Error _ -> exit 1
-    | _ -> exit 0
+    | `Ok code -> exit code
+    | `Help | `Version -> exit 0
   with OpamGlobals.Exit i -> exit i
