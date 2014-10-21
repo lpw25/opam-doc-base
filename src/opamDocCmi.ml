@@ -80,13 +80,6 @@ and read_text_element res : Documentation.text_element -> text = function
       | Some p, None -> [Ref(Val p, None)]
       | Some p, Some txt -> [Ref(Val p, Some (read_text res txt))]
     end
-  | Ref(RK_element, s, txt) -> begin
-      match lookup_value res s, txt with
-      | None, None -> [Raw s]
-      | None, Some txt -> read_text res txt
-      | Some p, None -> [Ref(Val p, None)]
-      | Some p, Some txt -> [Ref(Val p, Some (read_text res txt))]
-    end
   | Ref(RK_link, uri, txt) -> begin
       match txt with
       | None   -> [Ref (Link uri, None)]
